@@ -147,6 +147,60 @@ export async function getBybitP2POrders(
   return { orders: [], total: 0, rawResponse: { error: "All Bybit P2P endpoints failed" } };
 }
 
+// ─── Release order ────────────────────────────────────────────────────────────
+
+export interface BybitReleaseResult {
+  success: boolean;
+  orderId: string;
+  message: string;
+  raw?: unknown;
+}
+
+export async function releaseBybitOrder(
+  apiKey: string,
+  secret: string,
+  orderId: string
+): Promise<BybitReleaseResult> {
+  const endpoints = [
+    "/v5/p2p/order/release",
+    "/spot/v3/private/otc/order/release",
+  ];
+
+  for (const path of endpoints) {
+    try {
+      const data = await bybitPost(apiKey, secret, path, { orderId }) as Record<string, unknown>;
+      const code = data.retCode ?? data.ret_code ?? data.code;
+      const msg  = String(data.retMsg ?? data.ret_msg ?? data.msg ?? "");
+
+      logger.info({ path, orderId, code, msg }, "Bybit release attempt");
+
+      if (code === 0 || code === "0" || code === 200) {
+        return { success: true, orderId, message: "Ордер выпущен", raw: data };
+      }
+      // If "order not in correct state" or "already released" — treat as OK
+      const n = Number(code);
+      if (n === 20013 || n === 20014 || msg.toLowerCase().includes("already")) {
+        return { success: true, orderId, message: "Уже выпущен", raw: data };
+      }
+      logger.warn({ path, orderId, code, msg }, "Bybit release non-success, trying next");
+    } catch (err) {
+      logger.warn({ err, path, orderId }, "Bybit release endpoint exception");
+    }
+  }
+  return { success: false, orderId, message: "Не удалось выпустить ордер" };
+}
+
+// ─── Fetch orders by status ───────────────────────────────────────────────────
+
+export async function getBybitPaidOrders(
+  apiKey: string,
+  secret: string
+): Promise<BybitP2POrder[]> {
+  const result = await getBybitP2POrders(apiKey, secret, { page: 1, size: 20 });
+  // status 20 = paid (buyer paid, waiting for release)
+  return result.orders.filter(o => (o.status ?? o.orderStatus) === 20);
+}
+
 export function mapBybitStatus(status: number): "pending" | "paid" | "completed" | "cancelled" | "disputed" {
   switch (status) {
     case 10: case 20: return "pending";

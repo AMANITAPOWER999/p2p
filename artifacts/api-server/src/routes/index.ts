@@ -9,6 +9,7 @@ import notificationsRouter from "./notifications";
 import telegramRouter from "./telegram";
 import importRouter from "./import";
 import mexcSyncRouter from "./mexc-sync";
+import bybitReleaseRouter from "./bybit-release";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(notificationsRouter);
 router.use(telegramRouter);
 router.use(importRouter);
 router.use(mexcSyncRouter);
+router.use(bybitReleaseRouter);
 
 export default router;

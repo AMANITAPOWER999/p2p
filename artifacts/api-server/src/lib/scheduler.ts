@@ -1,6 +1,6 @@
 import { logger } from "./logger";
 import { getMexcC2COrdersWeb, mapMexcStatusToInternal, mapMexcTradeType, type MexcC2CWebOrder } from "./mexc";
-import { getBybitP2POrders, mapBybitStatus, mapBybitSide, type BybitP2POrder } from "./bybit";
+import { getBybitP2POrders, getBybitPaidOrders, releaseBybitOrder, mapBybitStatus, mapBybitSide, type BybitP2POrder } from "./bybit";
 import { db, tradesTable, accountsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
@@ -227,9 +227,100 @@ async function refreshAccountStats(accId: number) {
   await db.update(accountsTable).set({ completedTrades: Number(countRow.count), updatedAt: new Date() }).where(eq(accountsTable.id, accId));
 }
 
+// ─── Auto-release state ───────────────────────────────────────────────────────
+
+const AUTO_RELEASE_INTERVAL_MS = 2 * 60 * 1000; // 2 минуты
+
+export interface AutoReleaseState {
+  enabled: boolean;
+  running: boolean;
+  lastCheckAt: Date | null;
+  releasedCount: number;
+  lastReleased: Array<{ orderId: string; at: Date }>;
+  delayMs: number; // задержка перед выпуском (мс)
+}
+
+export const autoReleaseState: AutoReleaseState = {
+  enabled: false,
+  running: false,
+  lastCheckAt: null,
+  releasedCount: 0,
+  lastReleased: [],
+  delayMs: 0,
+};
+
+// Множество уже обработанных orderId (чтобы не дублировать)
+const releasedOrderIds = new Set<string>();
+
+export async function runAutoRelease(): Promise<void> {
+  if (autoReleaseState.running) return;
+  const apiKey = process.env["BYBIT_API_KEY"];
+  const apiSecret = process.env["BYBIT_API_SECRET"];
+  if (!apiKey || !apiSecret) return;
+
+  autoReleaseState.running = true;
+  autoReleaseState.lastCheckAt = new Date();
+
+  try {
+    const paidOrders = await getBybitPaidOrders(apiKey, apiSecret);
+    logger.info({ paidCount: paidOrders.length }, "Auto-release: checked paid orders");
+
+    for (const order of paidOrders) {
+      const orderId = String(order.id ?? order.orderId ?? "");
+      if (!orderId || releasedOrderIds.has(orderId)) continue;
+      releasedOrderIds.add(orderId);
+
+      if (autoReleaseState.delayMs > 0) {
+        await new Promise(r => setTimeout(r, autoReleaseState.delayMs));
+      }
+
+      const result = await releaseBybitOrder(apiKey, apiSecret, orderId);
+      logger.info({ orderId, success: result.success, msg: result.message }, "Auto-release: released order");
+
+      if (result.success) {
+        autoReleaseState.releasedCount++;
+        autoReleaseState.lastReleased.unshift({ orderId, at: new Date() });
+        if (autoReleaseState.lastReleased.length > 20) autoReleaseState.lastReleased.pop();
+
+        // Обновляем статус в БД
+        await db.update(tradesTable)
+          .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
+          .where(eq(tradesTable.exchangeTradeId, orderId));
+      } else {
+        // Убираем из множества, чтобы попробовать снова
+        releasedOrderIds.delete(orderId);
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, "Auto-release: check failed");
+  } finally {
+    autoReleaseState.running = false;
+  }
+}
+
+export async function releaseSingleOrder(orderId: string): Promise<{ success: boolean; message: string }> {
+  const apiKey = process.env["BYBIT_API_KEY"];
+  const apiSecret = process.env["BYBIT_API_SECRET"];
+  if (!apiKey || !apiSecret) return { success: false, message: "Ключи Bybit не настроены" };
+
+  const result = await releaseBybitOrder(apiKey, apiSecret, orderId);
+  if (result.success) {
+    releasedOrderIds.add(orderId);
+    autoReleaseState.releasedCount++;
+    autoReleaseState.lastReleased.unshift({ orderId, at: new Date() });
+    if (autoReleaseState.lastReleased.length > 20) autoReleaseState.lastReleased.pop();
+
+    await db.update(tradesTable)
+      .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
+      .where(eq(tradesTable.exchangeTradeId, orderId));
+  }
+  return { success: result.success, message: result.message };
+}
+
 // ─── Scheduler ────────────────────────────────────────────────────────────────
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
+let releaseInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startAutoSync(): void {
   const mexcToken = process.env["MEXC_WEB_TOKEN"];
@@ -267,4 +358,24 @@ export function startAutoSync(): void {
 
 export function stopAutoSync(): void {
   if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+}
+
+export function startAutoRelease(delayMs = 0): void {
+  autoReleaseState.enabled = true;
+  autoReleaseState.delayMs = delayMs;
+
+  if (releaseInterval) clearInterval(releaseInterval);
+  releaseInterval = setInterval(() => {
+    runAutoRelease().catch(err => logger.error({ err }, "Auto-release interval failed"));
+  }, AUTO_RELEASE_INTERVAL_MS);
+
+  // Первая проверка через 10 секунд
+  setTimeout(() => runAutoRelease().catch(() => {}), 10_000);
+  logger.info({ delayMs, intervalMs: AUTO_RELEASE_INTERVAL_MS }, "Auto-release: started");
+}
+
+export function stopAutoRelease(): void {
+  autoReleaseState.enabled = false;
+  if (releaseInterval) { clearInterval(releaseInterval); releaseInterval = null; }
+  logger.info("Auto-release: stopped");
 }

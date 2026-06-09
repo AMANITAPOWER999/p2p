@@ -32,6 +32,14 @@ interface SyncStatus {
   bybit: ExchangeSync;
   nextSyncAt: string | null;
 }
+interface AutoReleaseStatus {
+  enabled: boolean;
+  running: boolean;
+  lastCheckAt: string | null;
+  releasedCount: number;
+  delayMs: number;
+  lastReleased: Array<{ orderId: string; at: string }>;
+}
 
 type StatusFilter = "all" | "pending" | "paid" | "completed" | "cancelled";
 type View = "list" | "add" | "import";
@@ -130,6 +138,9 @@ export default function Trades() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [mexcSyncing, setMexcSyncing] = useState(false);
   const [bybitSyncing, setBybitSyncing] = useState(false);
+  const [autoRelease, setAutoRelease] = useState<AutoReleaseStatus | null>(null);
+  const [arToggling, setArToggling] = useState(false);
+  const [arChecking, setArChecking] = useState(false);
 
   const [addForm, setAddForm] = useState({
     accountId: "", side: "buy", asset: "USDT", fiatCurrency: "VND",
@@ -157,9 +168,18 @@ export default function Trades() {
     } catch { /* ignore */ }
   }
 
+  async function fetchAutoRelease() {
+    try {
+      const r = await fetch(`${BASE}api/bybit/auto-release/status`);
+      const d: AutoReleaseStatus = await r.json();
+      setAutoRelease(d);
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     fetchSyncStatus();
-    const id = setInterval(fetchSyncStatus, 15000);
+    fetchAutoRelease();
+    const id = setInterval(() => { fetchSyncStatus(); fetchAutoRelease(); }, 15000);
     return () => clearInterval(id);
   }, []);
 
@@ -171,6 +191,29 @@ export default function Trades() {
       }
     }
   }, [syncStatus?.mexc.running, syncStatus?.bybit.running]);
+
+  async function handleToggleAutoRelease() {
+    setArToggling(true);
+    try {
+      const endpoint = autoRelease?.enabled ? "disable" : "enable";
+      await fetch(`${BASE}api/bybit/auto-release/${endpoint}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      await fetchAutoRelease();
+      invalidate();
+    } finally { setArToggling(false); }
+  }
+
+  async function handleArCheckNow() {
+    setArChecking(true);
+    try {
+      await fetch(`${BASE}api/bybit/auto-release/check-now`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      await fetchAutoRelease();
+      invalidate();
+    } finally { setArChecking(false); }
+  }
 
   async function handleMexcSync() {
     setMexcSyncing(true);
@@ -343,6 +386,79 @@ export default function Trades() {
         {syncStatus?.nextSyncAt && (
           <div className="text-[10px] text-muted-foreground text-right">
             Следующий авто-синк: {formatNext(syncStatus.nextSyncAt)}
+          </div>
+        )}
+      </div>
+
+      {/* Авто-выпуск Bybit */}
+      <div className={`rounded-lg border p-3 space-y-2 transition-colors ${
+        autoRelease?.enabled
+          ? "bg-green-500/5 border-green-500/30"
+          : "bg-card border-border"
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+              autoRelease?.running ? "bg-yellow-400 animate-pulse" :
+              autoRelease?.enabled ? "bg-green-400" : "bg-muted-foreground"
+            }`} />
+            <div>
+              <span className="text-xs font-semibold text-foreground">Авто-выпуск Bybit P2P</span>
+              <span className="text-[10px] text-muted-foreground ml-2">
+                {autoRelease?.enabled ? "включён — проверка каждые 2 мин" : "выключен"}
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-1.5">
+            {autoRelease?.enabled && (
+              <button onClick={handleArCheckNow} disabled={arChecking || autoRelease.running}
+                className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:border-primary/50 transition-colors disabled:opacity-40">
+                {arChecking ? "..." : "Проверить"}
+              </button>
+            )}
+            <button onClick={handleToggleAutoRelease} disabled={arToggling}
+              className={`text-xs px-3 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
+                autoRelease?.enabled
+                  ? "bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20"
+                  : "bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20"
+              }`}>
+              {arToggling ? "..." : autoRelease?.enabled ? "Выключить" : "Включить"}
+            </button>
+          </div>
+        </div>
+
+        {autoRelease?.enabled && (
+          <div className="grid grid-cols-3 gap-1 text-xs text-muted-foreground">
+            <div>
+              <div className="text-foreground/50 text-[10px]">Посл. проверка</div>
+              <div>{formatRelative(autoRelease.lastCheckAt)}</div>
+            </div>
+            <div>
+              <div className="text-foreground/50 text-[10px]">Выпущено всего</div>
+              <div className="text-green-400 font-medium">{autoRelease.releasedCount}</div>
+            </div>
+            <div>
+              <div className="text-foreground/50 text-[10px]">Задержка</div>
+              <div>{autoRelease.delayMs > 0 ? `${autoRelease.delayMs / 1000}с` : "мгновенно"}</div>
+            </div>
+          </div>
+        )}
+
+        {autoRelease?.enabled && autoRelease.lastReleased.length > 0 && (
+          <div className="space-y-0.5">
+            <div className="text-[10px] text-muted-foreground">Последние выпуски:</div>
+            {autoRelease.lastReleased.slice(0, 3).map(r => (
+              <div key={r.orderId} className="flex justify-between text-[11px]">
+                <span className="text-green-400 font-mono">#{r.orderId.slice(-8)}</span>
+                <span className="text-muted-foreground">{formatRelative(r.at)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!autoRelease?.enabled && (
+          <div className="text-[11px] text-muted-foreground">
+            При включении: каждые 2 мин проверяет оплаченные ордера Bybit и автоматически отпускает крипту. Также принимает push от Bybit на <code className="text-xs bg-muted px-1 rounded">/api/bybit/webhook</code>
           </div>
         )}
       </div>
