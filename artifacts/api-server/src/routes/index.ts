@@ -8,6 +8,7 @@ import statsRouter from "./stats";
 import notificationsRouter from "./notifications";
 import telegramRouter from "./telegram";
 import importRouter from "./import";
+import mexcSyncRouter from "./mexc-sync";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(statsRouter);
 router.use(notificationsRouter);
 router.use(telegramRouter);
 router.use(importRouter);
+router.use(mexcSyncRouter);
 
 export default router;
