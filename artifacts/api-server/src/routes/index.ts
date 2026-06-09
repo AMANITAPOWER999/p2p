@@ -7,6 +7,7 @@ import paymentsRouter from "./payments";
 import statsRouter from "./stats";
 import notificationsRouter from "./notifications";
 import telegramRouter from "./telegram";
+import importRouter from "./import";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(paymentsRouter);
 router.use(statsRouter);
 router.use(notificationsRouter);
 router.use(telegramRouter);
+router.use(importRouter);
 
 export default router;
