@@ -1,22 +1,32 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: P2P Trading Bot API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: accounts
+    description: Trading accounts
+  - name: orders
+    description: P2P orders/ads
+  - name: trades
+    description: Active and historical trades
+  - name: payments
+    description: Payment records
+  - name: stats
+    description: Analytics and statistics
+  - name: notifications
+    description: Notifications and alerts
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +34,939 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      summary: List all trading accounts
+      responses:
+        "200":
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      summary: Add trading account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      tags: [accounts]
+      summary: Get account details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+    patch:
+      operationId: updateAccount
+      tags: [accounts]
+      summary: Update account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+
+  /accounts/{id}/sync:
+    post:
+      operationId: syncAccount
+      tags: [accounts]
+      summary: Sync account data from exchange
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      summary: List P2P orders/ads
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: integer
+        - name: side
+          in: query
+          schema:
+            type: string
+            enum: [buy, sell]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, all]
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create P2P order/ad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get order details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+    patch:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Update P2P order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+    delete:
+      operationId: deleteOrder
+      tags: [orders]
+      summary: Cancel/delete order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /orders/{id}/toggle:
+    patch:
+      operationId: toggleOrder
+      tags: [orders]
+      summary: Enable or disable P2P order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /trades:
+    get:
+      operationId: listTrades
+      tags: [trades]
+      summary: List trades
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, paid, completed, cancelled, all]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of trades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trade"
+    post:
+      operationId: createTrade
+      tags: [trades]
+      summary: Manually register a trade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradeInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+
+  /trades/{id}:
+    get:
+      operationId: getTrade
+      tags: [trades]
+      summary: Get trade details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trade details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+    patch:
+      operationId: updateTrade
+      tags: [trades]
+      summary: Update trade status or notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradeUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+
+  /trades/{id}/confirm-payment:
+    post:
+      operationId: confirmPayment
+      tags: [trades]
+      summary: Mark payment as sent for trade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+
+  /trades/{id}/release:
+    post:
+      operationId: releaseCrypto
+      tags: [trades]
+      summary: Release crypto / mark trade as completed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List payment records
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [incoming, outgoing, all]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, failed, all]
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+    post:
+      operationId: createPayment
+      tags: [payments]
+      summary: Record a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /payments/{id}:
+    patch:
+      operationId: updatePayment
+      tags: [payments]
+      summary: Update payment status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /stats/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [stats]
+      summary: Get dashboard summary statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /stats/history:
+    get:
+      operationId: getStatsHistory
+      tags: [stats]
+      summary: Get historical performance data
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Historical stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyStats"
+
+  /stats/by-account:
+    get:
+      operationId: getStatsByAccount
+      tags: [stats]
+      summary: Stats breakdown by account
+      responses:
+        "200":
+          description: Per-account stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountStats"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+  /notifications/read-all:
+    patch:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    Account:
+      type: object
+      required: [id, name, exchange, ownerName, bankName, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        exchange:
+          type: string
+          enum: [mexc, bybit]
+        ownerName:
+          type: string
+        bankName:
+          type: string
+        bankUrl:
+          type: ["string", "null"]
+        apiKeySet:
+          type: boolean
+        isActive:
+          type: boolean
+        balance:
+          type: ["number", "null"]
+        frozenBalance:
+          type: ["number", "null"]
+        totalVolume:
+          type: ["number", "null"]
+        totalProfit:
+          type: ["number", "null"]
+        completedTrades:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    AccountInput:
+      type: object
+      required: [name, exchange, ownerName, bankName]
+      properties:
+        name:
+          type: string
+        exchange:
+          type: string
+          enum: [mexc, bybit]
+        ownerName:
+          type: string
+        bankName:
+          type: string
+        bankUrl:
+          type: string
+        apiKey:
+          type: string
+        apiSecret:
+          type: string
+
+    AccountUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        bankName:
+          type: string
+        bankUrl:
+          type: string
+        apiKey:
+          type: string
+        apiSecret:
+          type: string
+        isActive:
+          type: boolean
+
+    SyncResult:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        ordersSync:
+          type: ["integer", "null"]
+        tradesSync:
+          type: ["integer", "null"]
+
+    Order:
+      type: object
+      required: [id, accountId, side, asset, fiatCurrency, price, minAmount, maxAmount, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: integer
+        accountName:
+          type: ["string", "null"]
+        exchange:
+          type: ["string", "null"]
+        side:
+          type: string
+          enum: [buy, sell]
+        asset:
+          type: string
+        fiatCurrency:
+          type: string
+        price:
+          type: number
+        minAmount:
+          type: number
+        maxAmount:
+          type: number
+        availableAmount:
+          type: ["number", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        completedTrades:
+          type: ["integer", "null"]
+        completionRate:
+          type: ["number", "null"]
+        exchangeOrderId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    OrderInput:
+      type: object
+      required: [accountId, side, asset, fiatCurrency, price, minAmount, maxAmount]
+      properties:
+        accountId:
+          type: integer
+        side:
+          type: string
+          enum: [buy, sell]
+        asset:
+          type: string
+        fiatCurrency:
+          type: string
+        price:
+          type: number
+        minAmount:
+          type: number
+        maxAmount:
+          type: number
+        availableAmount:
+          type: number
+        paymentMethod:
+          type: string
+
+    OrderUpdate:
+      type: object
+      properties:
+        price:
+          type: number
+        minAmount:
+          type: number
+        maxAmount:
+          type: number
+        availableAmount:
+          type: number
+        isActive:
+          type: boolean
+        paymentMethod:
+          type: string
+
+    Trade:
+      type: object
+      required: [id, accountId, side, asset, fiatCurrency, amount, fiatAmount, price, status, createdAt]
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: integer
+        accountName:
+          type: ["string", "null"]
+        exchange:
+          type: ["string", "null"]
+        orderId:
+          type: ["integer", "null"]
+        exchangeTradeId:
+          type: ["string", "null"]
+        counterpartyName:
+          type: ["string", "null"]
+        side:
+          type: string
+          enum: [buy, sell]
+        asset:
+          type: string
+        fiatCurrency:
+          type: string
+        amount:
+          type: number
+        fiatAmount:
+          type: number
+        price:
+          type: number
+        status:
+          type: string
+          enum: [pending, paid, completed, cancelled, disputed]
+        paymentMethod:
+          type: ["string", "null"]
+        paymentDetails:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        profit:
+          type: ["number", "null"]
+        completedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    TradeInput:
+      type: object
+      required: [accountId, side, asset, fiatCurrency, amount, fiatAmount, price]
+      properties:
+        accountId:
+          type: integer
+        orderId:
+          type: integer
+        exchangeTradeId:
+          type: string
+        counterpartyName:
+          type: string
+        side:
+          type: string
+          enum: [buy, sell]
+        asset:
+          type: string
+        fiatCurrency:
+          type: string
+        amount:
+          type: number
+        fiatAmount:
+          type: number
+        price:
+          type: number
+        paymentMethod:
+          type: string
+        paymentDetails:
+          type: string
+        notes:
+          type: string
+
+    TradeUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, paid, completed, cancelled, disputed]
+        notes:
+          type: string
+        paymentDetails:
+          type: string
+        profit:
+          type: number
+
+    Payment:
+      type: object
+      required: [id, accountId, type, amount, currency, status, createdAt]
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: integer
+        accountName:
+          type: ["string", "null"]
+        tradeId:
+          type: ["integer", "null"]
+        type:
+          type: string
+          enum: [incoming, outgoing]
+        amount:
+          type: number
+        currency:
+          type: string
+        bankName:
+          type: ["string", "null"]
+        senderName:
+          type: ["string", "null"]
+        reference:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, confirmed, failed]
+        source:
+          type: ["string", "null"]
+        notificationRaw:
+          type: ["string", "null"]
+        confirmedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    PaymentInput:
+      type: object
+      required: [accountId, type, amount, currency]
+      properties:
+        accountId:
+          type: integer
+        tradeId:
+          type: integer
+        type:
+          type: string
+          enum: [incoming, outgoing]
+        amount:
+          type: number
+        currency:
+          type: string
+        bankName:
+          type: string
+        senderName:
+          type: string
+        reference:
+          type: string
+        source:
+          type: string
+        notificationRaw:
+          type: string
+
+    PaymentUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, failed]
+        reference:
+          type: string
+
+    DashboardStats:
+      type: object
+      required: [totalVolume, totalProfit, activeTrades, completedTrades, pendingPayments, activeOrders]
+      properties:
+        totalVolume:
+          type: number
+        totalProfit:
+          type: number
+        activeTrades:
+          type: integer
+        completedTrades:
+          type: integer
+        pendingPayments:
+          type: integer
+        activeOrders:
+          type: integer
+        todayVolume:
+          type: ["number", "null"]
+        todayProfit:
+          type: ["number", "null"]
+        todayTrades:
+          type: ["integer", "null"]
+        unreadNotifications:
+          type: integer
+
+    DailyStats:
+      type: object
+      required: [date, volume, profit, tradesCount]
+      properties:
+        date:
+          type: string
+        volume:
+          type: number
+        profit:
+          type: number
+        tradesCount:
+          type: integer
+
+    AccountStats:
+      type: object
+      required: [accountId, accountName, exchange, ownerName, volume, profit, tradesCount]
+      properties:
+        accountId:
+          type: integer
+        accountName:
+          type: string
+        exchange:
+          type: string
+        ownerName:
+          type: string
+        volume:
+          type: number
+        profit:
+          type: number
+        tradesCount:
+          type: integer
+        activeOrders:
+          type: integer
+
+    Notification:
+      type: object
+      required: [id, type, title, message, isRead, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [trade, payment, order, system]
+        title:
+          type: string
+        message:
+          type: string
+        isRead:
+          type: boolean
+        relatedId:
+          type: ["integer", "null"]
+        relatedType:
+          type: ["string", "null"]
+        createdAt:
+          type: string

@@ -1,0 +1,173 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover-border: hsl(var(--popover-border));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-border: var(--primary-border);
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-border: var(--secondary-border);
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-border: var(--muted-border);
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-border: var(--accent-border);
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-border: var(--destructive-border);
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  
+  --color-buy: hsl(var(--buy));
+  --color-sell: hsl(var(--sell));
+  --color-mexc: hsl(var(--mexc));
+  --color-bybit: hsl(var(--bybit));
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --card-border: 240 3.7% 15.9%;
+  
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --popover-border: 240 3.7% 15.9%;
+  
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 0 0% 98%;
+  
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --success: 152 69% 31%;
+  --success-foreground: 0 0% 98%;
+
+  --warning: 38 92% 50%;
+  --warning-foreground: 240 10% 3.9%;
+
+  --buy: 152 69% 31%;
+  --sell: 348 83% 47%;
+  --mexc: 152 69% 31%;
+  --bybit: 38 92% 50%;
+
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+  
+  --chart-1: 217.2 91.2% 59.8%;
+  --chart-2: 152 69% 31%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 348 83% 47%;
+  --chart-5: 280 65% 60%;
+  
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --card-border: 240 3.7% 15.9%;
+  
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --popover-border: 240 3.7% 15.9%;
+  
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 0 0% 98%;
+  
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --success: 152 69% 31%;
+  --success-foreground: 0 0% 98%;
+
+  --warning: 38 92% 50%;
+  --warning-foreground: 240 10% 3.9%;
+
+  --buy: 152 69% 31%;
+  --sell: 348 83% 47%;
+  --mexc: 152 69% 31%;
+  --bybit: 38 92% 50%;
+
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+  
+  --chart-1: 217.2 91.2% 59.8%;
+  --chart-2: 152 69% 31%;
+  --chart-3: 38 92% 50%;
+  --chart-4: 348 83% 47%;
+  --chart-5: 280 65% 60%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
