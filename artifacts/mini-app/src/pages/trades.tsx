@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListTrades,
@@ -22,10 +22,44 @@ const statusLabel: Record<string, string> = {
   cancelled: "Отменено", disputed: "Спор",
 };
 
+interface SyncStatus {
+  autoSyncEnabled: boolean;
+  running: boolean;
+  lastSyncAt: string | null;
+  nextSyncAt: string | null;
+  lastSyncResult: {
+    success: boolean;
+    imported: number;
+    skipped: number;
+    totalFetched: number;
+    message: string;
+  } | null;
+}
+
 type StatusFilter = "all" | "pending" | "paid" | "completed" | "cancelled";
-type View = "list" | "add" | "import" | "mexc-sync";
+type View = "list" | "add" | "import";
 
 const BASE = import.meta.env.BASE_URL ?? "/";
+
+function formatRelative(iso: string | null): string {
+  if (!iso) return "—";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "только что";
+  if (mins < 60) return `${mins} мин назад`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} ч назад`;
+  return new Date(iso).toLocaleString("ru", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatNext(iso: string | null): string {
+  if (!iso) return "—";
+  const diff = new Date(iso).getTime() - Date.now();
+  if (diff <= 0) return "скоро";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `через ${mins} мин`;
+  return `через ${Math.floor(mins / 60)} ч`;
+}
 
 export default function Trades() {
   const [filter, setFilter] = useState<StatusFilter>("all");
@@ -35,6 +69,9 @@ export default function Trades() {
   const confirmMutation = useConfirmPayment();
   const releaseMutation = useReleaseCrypto();
   const queryClient = useQueryClient();
+
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [manualSyncing, setManualSyncing] = useState(false);
 
   const [addForm, setAddForm] = useState({
     accountId: "", side: "buy", asset: "USDT", fiatCurrency: "VND",
@@ -49,17 +86,49 @@ export default function Trades() {
   const [csvMsg, setCsvMsg] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [syncToken, setSyncToken] = useState("");
-  const [syncAccountId, setSyncAccountId] = useState("");
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncResult, setSyncResult] = useState<{
-    success?: boolean; message?: string; imported?: number; skipped?: number;
-    totalFetched?: number; pagesScanned?: number; errors?: string[]; rawSample?: unknown;
-  } | null>(null);
-
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: getListTradesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardStatsQueryKey() });
+  }
+
+  async function fetchSyncStatus() {
+    try {
+      const r = await fetch(`${BASE}api/mexc/sync-status`);
+      const d: SyncStatus = await r.json();
+      setSyncStatus(d);
+    } catch { /* ignore */ }
+  }
+
+  useEffect(() => {
+    fetchSyncStatus();
+    const id = setInterval(fetchSyncStatus, 15000);
+    return () => clearInterval(id);
+  }, []);
+
+  // когда синхронизация завершается — обновляем список сделок
+  useEffect(() => {
+    if (syncStatus && !syncStatus.running && syncStatus.lastSyncResult?.imported) {
+      invalidate();
+    }
+  }, [syncStatus?.running]);
+
+  async function handleManualSync() {
+    setManualSyncing(true);
+    try {
+      const r = await fetch(`${BASE}api/mexc/sync-now`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      await r.json();
+      await fetchSyncStatus();
+      invalidate();
+    } catch { /* ignore */ }
+    finally { setManualSyncing(false); }
+  }
+
+  function handleExportCSV() {
+    window.open(`${BASE}api/mexc/c2c-export?format=csv`, "_blank");
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -121,43 +190,6 @@ export default function Trades() {
     const reader = new FileReader();
     reader.onload = (ev) => setCsvText(ev.target?.result as string ?? "");
     reader.readAsText(file, "UTF-8");
-  }
-
-  async function handleMexcSync() {
-    const token = syncToken.trim();
-    if (!token) { setSyncResult({ success: false, message: "Введите веб-токен MEXC" }); return; }
-    setSyncLoading(true); setSyncResult(null);
-    try {
-      const res = await fetch(`${BASE}api/mexc/c2c-sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          webToken: token,
-          ...(syncAccountId ? { accountId: Number(syncAccountId) } : {}),
-        }),
-      });
-      const data = await res.json();
-      setSyncResult(data);
-      if (data.success && (data.imported ?? 0) > 0) {
-        invalidate();
-      }
-    } catch (err) {
-      setSyncResult({ success: false, message: "Ошибка сети: " + String(err) });
-    } finally {
-      setSyncLoading(false);
-    }
-  }
-
-  function handleExportCSV() {
-    const params = new URLSearchParams({ format: "csv" });
-    if (syncAccountId) params.set("accountId", syncAccountId);
-    window.open(`${BASE}api/mexc/c2c-export?${params.toString()}`, "_blank");
-  }
-
-  function handleExportJSON() {
-    const params = new URLSearchParams();
-    if (syncAccountId) params.set("accountId", syncAccountId);
-    window.open(`${BASE}api/mexc/c2c-export?${params.toString()}`, "_blank");
   }
 
   const filters: { key: StatusFilter; label: string }[] = [
@@ -279,120 +311,13 @@ export default function Trades() {
     );
   }
 
-  if (view === "mexc-sync") {
-    return (
-      <div className="p-4 space-y-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setView("list")} className="text-muted-foreground hover:text-foreground text-sm">← Назад</button>
-          <h1 className="text-xl font-bold">Синхронизация MEXC C2C</h1>
-        </div>
-
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-xs text-blue-300 space-y-1">
-          <div className="font-medium text-blue-200 mb-1">Как получить веб-токен MEXC:</div>
-          <div>1. Войдите в mexc.com в браузере</div>
-          <div>2. Откройте DevTools → Application → Local Storage → mexc.com</div>
-          <div>3. Найдите ключ <code className="bg-blue-500/20 px-1 rounded">authToken</code> или <code className="bg-blue-500/20 px-1 rounded">token</code></div>
-          <div>4. Или: DevTools → Network → любой запрос → Headers → Authorization → скопируйте значение после "Bearer "</div>
-        </div>
-
-        <div>
-          <label className={labelCls}>Веб-токен MEXC *</label>
-          <textarea
-            value={syncToken}
-            onChange={e => setSyncToken(e.target.value)}
-            rows={3}
-            className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-primary resize-none"
-            placeholder="WEB8cb3ad... или eyJhbGciOiJ..."
-          />
-        </div>
-
-        <div>
-          <label className={labelCls}>Привязать к аккаунту (опционально)</label>
-          <select value={syncAccountId} onChange={e => setSyncAccountId(e.target.value)} className={inputCls}>
-            <option value="">Автоматически (найти / создать MEXC аккаунт)</option>
-            {accounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </div>
-
-        <button
-          onClick={handleMexcSync}
-          disabled={syncLoading || !syncToken.trim()}
-          className="w-full py-2.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/30 text-sm font-medium disabled:opacity-50 transition-colors"
-        >
-          {syncLoading ? "Загружаем сделки из MEXC..." : "Синхронизировать все сделки"}
-        </button>
-
-        {syncResult && (
-          <div className={`rounded-lg p-3 border text-xs space-y-2 ${syncResult.success ? "bg-green-500/10 border-green-500/20" : "bg-red-500/10 border-red-500/20"}`}>
-            <div className={`font-medium ${syncResult.success ? "text-green-300" : "text-red-300"}`}>
-              {syncResult.success ? "✓ Готово" : "✗ Ошибка"}
-            </div>
-            <div className="text-muted-foreground">{syncResult.message}</div>
-            {syncResult.success && (
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                <div className="bg-background rounded p-2 text-center">
-                  <div className="text-lg font-bold text-foreground">{syncResult.totalFetched ?? 0}</div>
-                  <div className="text-muted-foreground">Найдено</div>
-                </div>
-                <div className="bg-background rounded p-2 text-center">
-                  <div className="text-lg font-bold text-green-400">{syncResult.imported ?? 0}</div>
-                  <div className="text-muted-foreground">Импорт.</div>
-                </div>
-                <div className="bg-background rounded p-2 text-center">
-                  <div className="text-lg font-bold text-muted-foreground">{syncResult.skipped ?? 0}</div>
-                  <div className="text-muted-foreground">Дублик.</div>
-                </div>
-              </div>
-            )}
-            {syncResult.rawSample && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Ответ API (debug)</summary>
-                <pre className="mt-2 bg-background rounded p-2 text-xs overflow-auto max-h-48 text-muted-foreground">
-                  {JSON.stringify(syncResult.rawSample, null, 2)}
-                </pre>
-              </details>
-            )}
-            {syncResult.errors && syncResult.errors.length > 0 && (
-              <details className="mt-1">
-                <summary className="cursor-pointer text-red-400">Ошибки ({syncResult.errors.length})</summary>
-                <ul className="mt-1 space-y-1">
-                  {syncResult.errors.map((e, i) => <li key={i} className="text-red-300">{e}</li>)}
-                </ul>
-              </details>
-            )}
-          </div>
-        )}
-
-        <div className="border-t border-border pt-4">
-          <div className="text-xs text-muted-foreground mb-3 font-medium">Экспорт сделок из базы данных</div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={handleExportCSV}
-              className="py-2 rounded border border-border text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
-            >
-              Скачать CSV
-            </button>
-            <button
-              onClick={handleExportJSON}
-              className="py-2 rounded border border-border text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
-            >
-              Скачать JSON
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isSyncing = syncStatus?.running || manualSyncing;
 
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Сделки</h1>
         <div className="flex gap-2">
-          <button onClick={() => setView("mexc-sync")}
-            className="text-xs px-2.5 py-1.5 rounded border border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 transition-colors">
-            MEXC Sync
-          </button>
           <button onClick={() => setView("import")}
             className="text-xs px-2.5 py-1.5 rounded border border-border text-muted-foreground hover:border-primary/50 transition-colors">
             CSV
@@ -402,6 +327,64 @@ export default function Trades() {
             + Добавить
           </button>
         </div>
+      </div>
+
+      {/* MEXC Автосинхронизация */}
+      <div className={`rounded-lg border p-3 space-y-2 transition-colors ${
+        syncStatus?.autoSyncEnabled
+          ? isSyncing
+            ? "bg-orange-500/10 border-orange-500/30"
+            : "bg-green-500/5 border-green-500/20"
+          : "bg-card border-border"
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${
+              isSyncing ? "bg-orange-400 animate-pulse" :
+              syncStatus?.autoSyncEnabled ? "bg-green-400" : "bg-muted-foreground"
+            }`} />
+            <span className="text-xs font-medium">
+              {isSyncing ? "Синхронизация..." :
+               syncStatus?.autoSyncEnabled ? "Авто-синхронизация MEXC активна" : "MEXC синхронизация"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportCSV}
+              className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:border-primary/50 transition-colors"
+            >
+              CSV ↓
+            </button>
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="text-xs px-2.5 py-1 rounded bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors disabled:opacity-50"
+            >
+              {isSyncing ? "..." : "Синхр. сейчас"}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+          <div>
+            <div className="text-foreground/60">Последняя</div>
+            <div>{formatRelative(syncStatus?.lastSyncAt ?? null)}</div>
+          </div>
+          <div>
+            <div className="text-foreground/60">Следующая</div>
+            <div>{syncStatus?.autoSyncEnabled ? formatNext(syncStatus?.nextSyncAt ?? null) : "—"}</div>
+          </div>
+          <div>
+            <div className="text-foreground/60">Импортировано</div>
+            <div>{syncStatus?.lastSyncResult?.imported ?? 0} новых</div>
+          </div>
+        </div>
+
+        {syncStatus?.lastSyncResult && !syncStatus.lastSyncResult.success && (
+          <div className="text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded">
+            {syncStatus.lastSyncResult.message}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -470,21 +453,25 @@ export default function Trades() {
           ))}
           {(!trades || trades.length === 0) && (
             <div className="text-center py-10 space-y-3">
-              <div className="text-muted-foreground text-sm">Сделок нет</div>
-              <div className="flex gap-2 justify-center flex-wrap">
-                <button onClick={() => setView("mexc-sync")}
-                  className="text-xs px-3 py-2 rounded border border-orange-500/30 text-orange-400 bg-orange-500/10">
-                  Синхронизация MEXC
-                </button>
-                <button onClick={() => setView("import")}
-                  className="text-xs px-3 py-2 rounded border border-border text-muted-foreground hover:border-primary/50">
-                  Импорт CSV
-                </button>
-                <button onClick={() => setView("add")}
-                  className="text-xs px-3 py-2 rounded bg-primary/10 text-primary border border-primary/30">
-                  + Добавить вручную
-                </button>
+              <div className="text-muted-foreground text-sm">
+                {isSyncing ? "Загружаем сделки из MEXC..." : "Сделок нет"}
               </div>
+              {!isSyncing && (
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <button onClick={handleManualSync}
+                    className="text-xs px-3 py-2 rounded border border-orange-500/30 text-orange-400 bg-orange-500/10">
+                    Синхронизировать MEXC
+                  </button>
+                  <button onClick={() => setView("import")}
+                    className="text-xs px-3 py-2 rounded border border-border text-muted-foreground hover:border-primary/50">
+                    Импорт CSV
+                  </button>
+                  <button onClick={() => setView("add")}
+                    className="text-xs px-3 py-2 rounded bg-primary/10 text-primary border border-primary/30">
+                    + Добавить вручную
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

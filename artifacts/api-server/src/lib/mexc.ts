@@ -110,38 +110,113 @@ export async function getMexcC2COrdersWeb(
   const pageNum = params.pageNum ?? 1;
   const pageSize = params.pageSize ?? 20;
 
-  const endpoints = [
+  const bodyObj = {
+    pageNum,
+    pageSize,
+    ...(params.tradeType ? { tradeType: params.tradeType } : {}),
+  };
+
+  // Common headers required by MEXC web platform (nginx rejects without Origin)
+  const webHeaders = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Origin": "https://www.mexc.com",
+    "Referer": "https://www.mexc.com/",
+  };
+  const otcHeaders = {
+    ...webHeaders,
+    "Origin": "https://otc.mexc.com",
+    "Referer": "https://otc.mexc.com/",
+  };
+
+  // Different MEXC C2C endpoints and auth strategies to try
+  const attempts: Array<{
+    url: string;
+    method: "POST" | "GET";
+    headers: Record<string, string>;
+    body?: string;
+  }> = [
+    // 1. OTC domain — v1 GET (most common)
+    {
+      url: `https://otc.mexc.com/api/v1/order/page?page=${pageNum}&size=${pageSize}`,
+      method: "GET",
+      headers: { ...otcHeaders, Authorization: `Bearer ${webToken}` },
+    },
+    // 2. OTC domain — v1 POST
+    {
+      url: "https://otc.mexc.com/api/v1/order/page",
+      method: "POST",
+      headers: { ...otcHeaders, Authorization: `Bearer ${webToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ page: pageNum, size: pageSize }),
+    },
+    // 3. OTC c2c order list
+    {
+      url: `https://otc.mexc.com/api/v1/c2c/order/list?pageNum=${pageNum}&pageSize=${pageSize}`,
+      method: "GET",
+      headers: { ...otcHeaders, Authorization: `Bearer ${webToken}` },
+    },
+    // 4. OTC order history
+    {
+      url: `https://otc.mexc.com/api/v1/c2c/order/history?pageNum=${pageNum}&pageSize=${pageSize}`,
+      method: "GET",
+      headers: { ...otcHeaders, Authorization: `Bearer ${webToken}` },
+    },
+    // 5. Main domain c2c-list with Origin (was 400 without it)
     {
       url: "https://www.mexc.com/api/platform/spot/order/c2c-list",
-      method: "POST" as const,
-      body: JSON.stringify({
-        pageNum,
-        pageSize,
-        ...(params.tradeType ? { tradeType: params.tradeType } : {}),
-      }),
+      method: "POST",
+      headers: { ...webHeaders, Authorization: `Bearer ${webToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(bodyObj),
     },
+    // 6. Main domain — token without Bearer prefix
     {
-      url: `https://www.mexc.com/api/platform/spot/order/c2c-list?pageNum=${pageNum}&pageSize=${pageSize}`,
-      method: "GET" as const,
-      body: undefined,
+      url: "https://www.mexc.com/api/platform/spot/order/c2c-list",
+      method: "POST",
+      headers: { ...webHeaders, Authorization: webToken, "Content-Type": "application/json" },
+      body: JSON.stringify(bodyObj),
+    },
+    // 7. Token as cookie with Origin
+    {
+      url: "https://www.mexc.com/api/platform/spot/order/c2c-list",
+      method: "POST",
+      headers: {
+        ...webHeaders,
+        Cookie: `authToken=${webToken}; token=${webToken}; _token=${webToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(bodyObj),
+    },
+    // 8. OTC — token without Bearer
+    {
+      url: `https://otc.mexc.com/api/v1/order/page?page=${pageNum}&size=${pageSize}`,
+      method: "GET",
+      headers: { ...otcHeaders, Authorization: webToken },
     },
   ];
 
-  for (const ep of endpoints) {
+  for (const ep of attempts) {
     try {
       const res = await fetch(ep.url, {
         method: ep.method,
         headers: {
-          Authorization: `Bearer ${webToken}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "User-Agent": "Mozilla/5.0 (compatible; TradingBot/1.0)",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          ...ep.headers,
         },
         ...(ep.body ? { body: ep.body } : {}),
       });
 
       const text = await res.text();
-      logger.info({ url: ep.url, status: res.status, bodySnippet: text.slice(0, 200) }, "MEXC C2C web response");
+      logger.info(
+        { url: ep.url, method: ep.method, status: res.status, bodySnippet: text.slice(0, 300) },
+        "MEXC C2C web response"
+      );
+
+      // Skip non-JSON HTML error pages
+      if (text.trim().startsWith("<")) {
+        logger.warn({ url: ep.url, status: res.status }, "MEXC C2C: HTML response, skipping");
+        continue;
+      }
 
       let data: Record<string, unknown>;
       try {
@@ -151,8 +226,15 @@ export async function getMexcC2COrdersWeb(
         continue;
       }
 
-      if (data.code && Number(data.code) !== 200 && Number(data.code) !== 0) {
-        logger.warn({ code: data.code, msg: data.msg ?? data.message }, "MEXC C2C API error code");
+      // Auth failure codes — don't try extracting orders
+      const code = Number(data.code ?? data.status ?? 0);
+      if (code === 401 || code === 403 || code === 10000 || code === 10001 || code === 30001) {
+        logger.warn({ url: ep.url, code, msg: data.msg ?? data.message }, "MEXC C2C: auth error, trying next");
+        continue;
+      }
+
+      if (code !== 0 && code !== 200 && code !== 0) {
+        logger.warn({ url: ep.url, code, msg: data.msg ?? data.message }, "MEXC C2C: non-success code");
         return { orders: [], total: 0, rawResponse: data };
       }
 
@@ -161,13 +243,14 @@ export async function getMexcC2COrdersWeb(
       const total = Number(inner.total ?? inner.totalCount ?? inner.count ?? (Array.isArray(list) ? list.length : 0));
       const orders = Array.isArray(list) ? (list as MexcC2CWebOrder[]) : [];
 
+      logger.info({ url: ep.url, ordersFound: orders.length, total }, "MEXC C2C: success");
       return { orders, total, rawResponse: data };
     } catch (err) {
       logger.warn({ err, url: ep.url }, "MEXC C2C endpoint failed");
     }
   }
 
-  return { orders: [], total: 0 };
+  return { orders: [], total: 0, rawResponse: { error: "All endpoints failed" } };
 }
 
 export async function getMexcSpotTrades(

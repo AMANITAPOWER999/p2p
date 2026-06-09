@@ -33,3 +33,8 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+MEXC_WEB_TOKEN = "WEB8cb3ad88e39b5fb9173702cea005a95f1e874614f3ad5acfc0961176f901e7b3"
