@@ -1,35 +1,38 @@
 import { Router } from "express";
 import { db, tradesTable, accountsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { syncState, runMexcSync } from "../lib/scheduler";
+import { syncState, runMexcSync, runBybitSync } from "../lib/scheduler";
 
 const router = Router();
 
+// ── Статус обоих бирж ────────────────────────────────────────────────────────
+
 router.get("/mexc/sync-status", (_req, res) => {
-  const token = process.env["MEXC_WEB_TOKEN"];
   res.json({
-    autoSyncEnabled: !!token,
-    running: syncState.running,
-    lastSyncAt: syncState.lastSyncAt?.toISOString() ?? null,
+    mexc: {
+      enabled: syncState.mexc.enabled,
+      running: syncState.mexc.running,
+      lastSyncAt: syncState.mexc.lastSyncAt?.toISOString() ?? null,
+      lastResult: syncState.mexc.lastResult,
+    },
+    bybit: {
+      enabled: syncState.bybit.enabled,
+      running: syncState.bybit.running,
+      lastSyncAt: syncState.bybit.lastSyncAt?.toISOString() ?? null,
+      lastResult: syncState.bybit.lastResult,
+    },
     nextSyncAt: syncState.nextSyncAt
-      ? new Date(syncState.lastSyncAt
-          ? syncState.lastSyncAt.getTime() + 60 * 60 * 1000
-          : Date.now() + 60 * 60 * 1000).toISOString()
+      ? new Date(Date.now() + 60 * 60 * 1000).toISOString()
       : null,
-    lastSyncResult: syncState.lastSyncResult,
   });
 });
 
+// ── Ручной запуск MEXC ───────────────────────────────────────────────────────
+
 router.post("/mexc/sync-now", async (req, res) => {
   const token = (req.body?.webToken as string | undefined)?.trim() || process.env["MEXC_WEB_TOKEN"];
-  if (!token) {
-    res.status(400).json({ error: "Токен не задан. Укажите MEXC_WEB_TOKEN или передайте webToken в теле запроса." });
-    return;
-  }
-  if (syncState.running) {
-    res.status(409).json({ error: "Синхронизация уже запущена", running: true });
-    return;
-  }
+  if (!token) { res.status(400).json({ error: "Токен не задан" }); return; }
+  if (syncState.mexc.running) { res.status(409).json({ error: "Синхронизация уже запущена", running: true }); return; }
   try {
     const result = await runMexcSync(token);
     res.json({ success: true, ...result });
@@ -39,11 +42,30 @@ router.post("/mexc/sync-now", async (req, res) => {
   }
 });
 
+// ── Ручной запуск Bybit ──────────────────────────────────────────────────────
+
+router.post("/bybit/sync-now", async (req, res) => {
+  const apiKey = (req.body?.apiKey as string | undefined)?.trim() || process.env["BYBIT_API_KEY"];
+  const apiSecret = (req.body?.apiSecret as string | undefined)?.trim() || process.env["BYBIT_API_SECRET"];
+  if (!apiKey || !apiSecret) { res.status(400).json({ error: "BYBIT_API_KEY и BYBIT_API_SECRET не заданы" }); return; }
+  if (syncState.bybit.running) { res.status(409).json({ error: "Bybit синхронизация уже запущена", running: true }); return; }
+  try {
+    const result = await runBybitSync(apiKey, apiSecret);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    req.log.error(err, "bybit sync-now failed");
+    res.status(500).json({ error: "Ошибка Bybit синхронизации" });
+  }
+});
+
+// ── Экспорт CSV/JSON ──────────────────────────────────────────────────────────
+
 router.get("/mexc/c2c-export", async (req, res) => {
   try {
     const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
+    const exchange = req.query.exchange as string | undefined;
 
-    const trades = await db
+    let query = db
       .select({
         id: tradesTable.id,
         exchangeTradeId: tradesTable.exchangeTradeId,
@@ -60,8 +82,21 @@ router.get("/mexc/c2c-export", async (req, res) => {
         completedAt: tradesTable.completedAt,
       })
       .from(tradesTable)
-      .where(accountId ? eq(tradesTable.accountId, accountId) : undefined as never)
-      .orderBy(tradesTable.createdAt);
+      .$dynamic();
+
+    if (accountId) {
+      query = query.where(eq(tradesTable.accountId, accountId));
+    } else if (exchange) {
+      const accounts = await db.select({ id: accountsTable.id })
+        .from(accountsTable)
+        .where(eq(accountsTable.exchange, exchange));
+      const ids = accounts.map(a => a.id);
+      if (ids.length > 0) {
+        query = query.where(eq(tradesTable.accountId, ids[0]));
+      }
+    }
+
+    const trades = await query.orderBy(tradesTable.createdAt);
 
     if (req.query.format === "csv") {
       const header = "ID,ExchangeTradeId,Side,Asset,FiatCurrency,Amount,Price,FiatAmount,Status,Counterparty,PaymentMethod,CreatedAt,CompletedAt";
@@ -83,14 +118,14 @@ router.get("/mexc/c2c-export", async (req, res) => {
         ].join(",")
       );
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="mexc_trades_${Date.now()}.csv"`);
+      res.setHeader("Content-Disposition", `attachment; filename="trades_${exchange ?? "all"}_${Date.now()}.csv"`);
       res.send([header, ...rows].join("\n"));
       return;
     }
 
     res.json({ trades, total: trades.length });
   } catch (err) {
-    req.log.error(err, "MEXC export failed");
+    req.log.error(err, "Export failed");
     res.status(500).json({ error: "Ошибка экспорта" });
   }
 });

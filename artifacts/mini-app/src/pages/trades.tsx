@@ -16,24 +16,21 @@ const statusColor: Record<string, string> = {
   cancelled: "text-red-400 bg-red-500/10 border-red-500/20",
   disputed:  "text-orange-400 bg-orange-500/10 border-orange-500/20",
 };
-
 const statusLabel: Record<string, string> = {
   pending: "Ожидание", paid: "Оплачено", completed: "Завершено",
   cancelled: "Отменено", disputed: "Спор",
 };
 
-interface SyncStatus {
-  autoSyncEnabled: boolean;
+interface ExchangeSync {
+  enabled: boolean;
   running: boolean;
   lastSyncAt: string | null;
+  lastResult: { success: boolean; imported: number; skipped: number; totalFetched: number; message: string; rawSample?: unknown } | null;
+}
+interface SyncStatus {
+  mexc: ExchangeSync;
+  bybit: ExchangeSync;
   nextSyncAt: string | null;
-  lastSyncResult: {
-    success: boolean;
-    imported: number;
-    skipped: number;
-    totalFetched: number;
-    message: string;
-  } | null;
 }
 
 type StatusFilter = "all" | "pending" | "paid" | "completed" | "cancelled";
@@ -47,9 +44,7 @@ function formatRelative(iso: string | null): string {
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "только что";
   if (mins < 60) return `${mins} мин назад`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} ч назад`;
-  return new Date(iso).toLocaleString("ru", { dateStyle: "short", timeStyle: "short" });
+  return `${Math.floor(mins / 60)} ч назад`;
 }
 
 function formatNext(iso: string | null): string {
@@ -57,8 +52,70 @@ function formatNext(iso: string | null): string {
   const diff = new Date(iso).getTime() - Date.now();
   if (diff <= 0) return "скоро";
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `через ${mins} мин`;
-  return `через ${Math.floor(mins / 60)} ч`;
+  return mins < 60 ? `через ${mins} мин` : `через ${Math.floor(mins / 60)} ч`;
+}
+
+function ExchangeCard({
+  name, color, sync, onSyncNow, onExport, syncing,
+}: {
+  name: string; color: string; sync: ExchangeSync | null;
+  onSyncNow: () => void; onExport: () => void; syncing: boolean;
+}) {
+  const isRunning = syncing || sync?.running;
+  return (
+    <div className={`rounded-lg border p-3 space-y-2 transition-colors ${
+      sync?.enabled
+        ? isRunning ? `bg-${color}-500/10 border-${color}-500/30`
+          : sync.lastResult?.success ? "bg-green-500/5 border-green-500/20"
+          : "bg-card border-border"
+        : "bg-card border-border"
+    }`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+            isRunning ? "bg-yellow-400 animate-pulse" :
+            sync?.enabled ? "bg-green-400" : "bg-muted-foreground"
+          }`} />
+          <span className="text-xs font-medium text-foreground">
+            {name}
+            {sync?.enabled
+              ? isRunning ? " — синхронизация..." : " — авто-синк активен"
+              : " — не настроен"}
+          </span>
+        </div>
+        <div className="flex gap-1.5">
+          <button onClick={onExport}
+            className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:border-primary/50 transition-colors">
+            CSV ↓
+          </button>
+          <button onClick={onSyncNow} disabled={!!isRunning}
+            className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors disabled:opacity-40">
+            {isRunning ? "..." : "Синхр."}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1 text-xs text-muted-foreground">
+        <div><div className="text-foreground/50 text-[10px]">Посл. синк</div><div>{formatRelative(sync?.lastSyncAt ?? null)}</div></div>
+        <div><div className="text-foreground/50 text-[10px]">Найдено</div><div>{sync?.lastResult?.totalFetched ?? 0}</div></div>
+        <div><div className="text-foreground/50 text-[10px]">Импортировано</div><div>{sync?.lastResult?.imported ?? 0}</div></div>
+      </div>
+
+      {sync?.lastResult && !sync.lastResult.success && (
+        <div className="text-[11px] text-red-400 bg-red-500/10 px-2 py-1 rounded truncate">
+          {sync.lastResult.message}
+        </div>
+      )}
+      {sync?.lastResult?.rawSample && (
+        <details className="text-[10px]">
+          <summary className="cursor-pointer text-muted-foreground">Debug ответ API</summary>
+          <pre className="mt-1 bg-background rounded p-1.5 overflow-auto max-h-32 text-muted-foreground">
+            {JSON.stringify(sync.lastResult.rawSample, null, 2).slice(0, 500)}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
 }
 
 export default function Trades() {
@@ -71,7 +128,8 @@ export default function Trades() {
   const queryClient = useQueryClient();
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [manualSyncing, setManualSyncing] = useState(false);
+  const [mexcSyncing, setMexcSyncing] = useState(false);
+  const [bybitSyncing, setBybitSyncing] = useState(false);
 
   const [addForm, setAddForm] = useState({
     accountId: "", side: "buy", asset: "USDT", fiatCurrency: "VND",
@@ -105,30 +163,31 @@ export default function Trades() {
     return () => clearInterval(id);
   }, []);
 
-  // когда синхронизация завершается — обновляем список сделок
   useEffect(() => {
-    if (syncStatus && !syncStatus.running && syncStatus.lastSyncResult?.imported) {
-      invalidate();
+    if (!syncStatus) return;
+    if (!syncStatus.mexc.running && !syncStatus.bybit.running) {
+      if ((syncStatus.mexc.lastResult?.imported ?? 0) > 0 || (syncStatus.bybit.lastResult?.imported ?? 0) > 0) {
+        invalidate();
+      }
     }
-  }, [syncStatus?.running]);
+  }, [syncStatus?.mexc.running, syncStatus?.bybit.running]);
 
-  async function handleManualSync() {
-    setManualSyncing(true);
+  async function handleMexcSync() {
+    setMexcSyncing(true);
     try {
-      const r = await fetch(`${BASE}api/mexc/sync-now`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      await r.json();
+      await fetch(`${BASE}api/mexc/sync-now`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
       await fetchSyncStatus();
       invalidate();
-    } catch { /* ignore */ }
-    finally { setManualSyncing(false); }
+    } finally { setMexcSyncing(false); }
   }
 
-  function handleExportCSV() {
-    window.open(`${BASE}api/mexc/c2c-export?format=csv`, "_blank");
+  async function handleBybitSync() {
+    setBybitSyncing(true);
+    try {
+      await fetch(`${BASE}api/bybit/sync-now`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      await fetchSyncStatus();
+      invalidate();
+    } finally { setBybitSyncing(false); }
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -136,29 +195,20 @@ export default function Trades() {
     setAddLoading(true); setAddMsg("");
     try {
       const res = await fetch(`${BASE}api/trades`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          accountId: Number(addForm.accountId),
-          side: addForm.side,
-          asset: addForm.asset,
-          fiatCurrency: addForm.fiatCurrency,
-          amount: Number(addForm.amount),
-          price: Number(addForm.price),
+          accountId: Number(addForm.accountId), side: addForm.side,
+          asset: addForm.asset, fiatCurrency: addForm.fiatCurrency,
+          amount: Number(addForm.amount), price: Number(addForm.price),
           fiatAmount: Number(addForm.fiatAmount),
-          counterpartyName: addForm.counterpartyName || null,
-          status: addForm.status,
+          counterpartyName: addForm.counterpartyName || null, status: addForm.status,
         }),
       });
       if (res.ok) {
         setAddMsg("✓ Сделка добавлена");
-        setAddForm({ accountId: addForm.accountId, side: "buy", asset: "USDT", fiatCurrency: "VND",
-          amount: "", price: "", fiatAmount: "", counterpartyName: "", status: "completed" });
+        setAddForm({ accountId: addForm.accountId, side: "buy", asset: "USDT", fiatCurrency: "VND", amount: "", price: "", fiatAmount: "", counterpartyName: "", status: "completed" });
         invalidate();
-      } else {
-        const e = await res.json();
-        setAddMsg("Ошибка: " + (e.error ?? "неизвестная"));
-      }
+      } else { const e = await res.json(); setAddMsg("Ошибка: " + (e.error ?? "неизвестная")); }
     } catch { setAddMsg("Ошибка сети"); }
     finally { setAddLoading(false); }
   }
@@ -168,18 +218,12 @@ export default function Trades() {
     setCsvLoading(true); setCsvMsg("");
     try {
       const res = await fetch(`${BASE}api/trades/import-csv`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountId: Number(csvAccountId), csv: csvText }),
       });
       const data = await res.json();
-      if (data.success) {
-        setCsvMsg(`✓ ${data.message}`);
-        invalidate();
-        setTimeout(() => { setView("list"); setCsvText(""); }, 1500);
-      } else {
-        setCsvMsg("Ошибка: " + (data.error ?? "неизвестная"));
-      }
+      if (data.success) { setCsvMsg(`✓ ${data.message}`); invalidate(); setTimeout(() => { setView("list"); setCsvText(""); }, 1500); }
+      else { setCsvMsg("Ошибка: " + (data.error ?? "неизвестная")); }
     } catch { setCsvMsg("Ошибка сети"); }
     finally { setCsvLoading(false); }
   }
@@ -196,7 +240,6 @@ export default function Trades() {
     { key: "all", label: "Все" }, { key: "pending", label: "Ожидание" },
     { key: "paid", label: "Оплачено" }, { key: "completed", label: "Завершено" },
   ];
-
   const inputCls = "w-full bg-background border border-border rounded px-2 py-1.5 text-sm focus:outline-none focus:border-primary";
   const labelCls = "block text-xs text-muted-foreground mb-1";
 
@@ -208,63 +251,34 @@ export default function Trades() {
           <h1 className="text-xl font-bold">Добавить сделку</h1>
         </div>
         <form onSubmit={handleAdd} className="space-y-3">
-          <div>
-            <label className={labelCls}>Аккаунт *</label>
+          <div><label className={labelCls}>Аккаунт *</label>
             <select value={addForm.accountId} onChange={e => setAddForm(f => ({...f, accountId: e.target.value}))} className={inputCls} required>
               <option value="">Выберите аккаунт</option>
               {accounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
+            </select></div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Сторона</label>
+            <div><label className={labelCls}>Сторона</label>
               <select value={addForm.side} onChange={e => setAddForm(f => ({...f, side: e.target.value}))} className={inputCls}>
-                <option value="buy">Покупка</option>
-                <option value="sell">Продажа</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Статус</label>
+                <option value="buy">Покупка</option><option value="sell">Продажа</option>
+              </select></div>
+            <div><label className={labelCls}>Статус</label>
               <select value={addForm.status} onChange={e => setAddForm(f => ({...f, status: e.target.value}))} className={inputCls}>
-                <option value="completed">Завершено</option>
-                <option value="pending">Ожидание</option>
-                <option value="paid">Оплачено</option>
-                <option value="cancelled">Отменено</option>
-              </select>
-            </div>
+                <option value="completed">Завершено</option><option value="pending">Ожидание</option>
+                <option value="paid">Оплачено</option><option value="cancelled">Отменено</option>
+              </select></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Актив</label>
-              <input value={addForm.asset} onChange={e => setAddForm(f => ({...f, asset: e.target.value}))} className={inputCls} placeholder="USDT" />
-            </div>
-            <div>
-              <label className={labelCls}>Валюта</label>
-              <input value={addForm.fiatCurrency} onChange={e => setAddForm(f => ({...f, fiatCurrency: e.target.value}))} className={inputCls} placeholder="VND" />
-            </div>
+            <div><label className={labelCls}>Актив</label><input value={addForm.asset} onChange={e => setAddForm(f => ({...f, asset: e.target.value}))} className={inputCls} placeholder="USDT" /></div>
+            <div><label className={labelCls}>Валюта</label><input value={addForm.fiatCurrency} onChange={e => setAddForm(f => ({...f, fiatCurrency: e.target.value}))} className={inputCls} placeholder="VND" /></div>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className={labelCls}>Кол-во USDT *</label>
-              <input type="number" step="any" value={addForm.amount} onChange={e => setAddForm(f => ({...f, amount: e.target.value}))} className={inputCls} placeholder="100" required />
-            </div>
-            <div>
-              <label className={labelCls}>Цена за 1 *</label>
-              <input type="number" step="any" value={addForm.price} onChange={e => setAddForm(f => ({...f, price: e.target.value}))} className={inputCls} placeholder="25000" required />
-            </div>
-            <div>
-              <label className={labelCls}>Итого фиат *</label>
-              <input type="number" step="any" value={addForm.fiatAmount} onChange={e => setAddForm(f => ({...f, fiatAmount: e.target.value}))} className={inputCls} placeholder="2500000" required />
-            </div>
+            <div><label className={labelCls}>Кол-во *</label><input type="number" step="any" value={addForm.amount} onChange={e => setAddForm(f => ({...f, amount: e.target.value}))} className={inputCls} placeholder="100" required /></div>
+            <div><label className={labelCls}>Цена *</label><input type="number" step="any" value={addForm.price} onChange={e => setAddForm(f => ({...f, price: e.target.value}))} className={inputCls} placeholder="25000" required /></div>
+            <div><label className={labelCls}>Итого *</label><input type="number" step="any" value={addForm.fiatAmount} onChange={e => setAddForm(f => ({...f, fiatAmount: e.target.value}))} className={inputCls} placeholder="2500000" required /></div>
           </div>
-          <div>
-            <label className={labelCls}>Контрагент</label>
-            <input value={addForm.counterpartyName} onChange={e => setAddForm(f => ({...f, counterpartyName: e.target.value}))} className={inputCls} placeholder="Имя / никнейм" />
-          </div>
+          <div><label className={labelCls}>Контрагент</label><input value={addForm.counterpartyName} onChange={e => setAddForm(f => ({...f, counterpartyName: e.target.value}))} className={inputCls} placeholder="Имя / никнейм" /></div>
           {addMsg && <div className={`text-xs px-3 py-2 rounded ${addMsg.startsWith("✓") ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>{addMsg}</div>}
-          <button type="submit" disabled={addLoading} className="w-full py-2 rounded bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
-            {addLoading ? "Сохранение..." : "Добавить сделку"}
-          </button>
+          <button type="submit" disabled={addLoading} className="w-full py-2 rounded bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">{addLoading ? "Сохранение..." : "Добавить сделку"}</button>
         </form>
       </div>
     );
@@ -275,33 +289,20 @@ export default function Trades() {
       <div className="p-4 space-y-4">
         <div className="flex items-center gap-3">
           <button onClick={() => setView("list")} className="text-muted-foreground hover:text-foreground text-sm">← Назад</button>
-          <h1 className="text-xl font-bold">Импорт CSV из MEXC</h1>
+          <h1 className="text-xl font-bold">Импорт CSV</h1>
         </div>
-        <div className="bg-card border border-border rounded-lg p-3 text-xs text-muted-foreground space-y-1">
-          <div className="font-medium text-foreground mb-1">Как экспортировать из MEXC P2P:</div>
-          <div>1. MEXC → C2C Trading → Orders → Order History</div>
-          <div>2. Нажать Export / Download → выбрать период</div>
-          <div>3. Скачать CSV файл и загрузить сюда</div>
-        </div>
-        <div>
-          <label className={labelCls}>Аккаунт *</label>
+        <div><label className={labelCls}>Аккаунт *</label>
           <select value={csvAccountId} onChange={e => setCsvAccountId(e.target.value)} className={inputCls}>
             <option value="">Выберите аккаунт</option>
             {accounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className={labelCls}>CSV файл</label>
+          </select></div>
+        <div><label className={labelCls}>CSV файл</label>
           <input type="file" accept=".csv,.txt" ref={fileRef} onChange={handleFileRead}
-            className="w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-primary/10 file:text-primary cursor-pointer" />
-        </div>
-        <div>
-          <label className={labelCls}>Или вставьте CSV текст напрямую</label>
+            className="w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-primary/10 file:text-primary cursor-pointer" /></div>
+        <div><label className={labelCls}>Или вставьте CSV текст</label>
           <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={8}
             className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-primary resize-none"
-            placeholder={"Order Number,Trade Type,Crypto,Fiat Currency,Price,Amount,Total\n12345,Buy,USDT,VND,25000,100,2500000"} />
-          <div className="text-xs text-muted-foreground mt-1">Строк: {csvText ? csvText.split("\n").filter(l => l.trim()).length : 0}</div>
-        </div>
+            placeholder={"Order Number,Trade Type,Crypto,Fiat Currency,Price,Amount,Total\n12345,Buy,USDT,VND,25000,100,2500000"} /></div>
         {csvMsg && <div className={`text-xs px-3 py-2 rounded ${csvMsg.startsWith("✓") ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>{csvMsg}</div>}
         <button onClick={handleCsvImport} disabled={csvLoading || !csvAccountId || !csvText.trim()}
           className="w-full py-2 rounded bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">
@@ -311,78 +312,37 @@ export default function Trades() {
     );
   }
 
-  const isSyncing = syncStatus?.running || manualSyncing;
-
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Сделки</h1>
         <div className="flex gap-2">
-          <button onClick={() => setView("import")}
-            className="text-xs px-2.5 py-1.5 rounded border border-border text-muted-foreground hover:border-primary/50 transition-colors">
-            CSV
-          </button>
-          <button onClick={() => setView("add")}
-            className="text-xs px-2.5 py-1.5 rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-colors">
-            + Добавить
-          </button>
+          <button onClick={() => setView("import")} className="text-xs px-2.5 py-1.5 rounded border border-border text-muted-foreground hover:border-primary/50 transition-colors">CSV</button>
+          <button onClick={() => setView("add")} className="text-xs px-2.5 py-1.5 rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-colors">+ Добавить</button>
         </div>
       </div>
 
-      {/* MEXC Автосинхронизация */}
-      <div className={`rounded-lg border p-3 space-y-2 transition-colors ${
-        syncStatus?.autoSyncEnabled
-          ? isSyncing
-            ? "bg-orange-500/10 border-orange-500/30"
-            : "bg-green-500/5 border-green-500/20"
-          : "bg-card border-border"
-      }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${
-              isSyncing ? "bg-orange-400 animate-pulse" :
-              syncStatus?.autoSyncEnabled ? "bg-green-400" : "bg-muted-foreground"
-            }`} />
-            <span className="text-xs font-medium">
-              {isSyncing ? "Синхронизация..." :
-               syncStatus?.autoSyncEnabled ? "Авто-синхронизация MEXC активна" : "MEXC синхронизация"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportCSV}
-              className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:border-primary/50 transition-colors"
-            >
-              CSV ↓
-            </button>
-            <button
-              onClick={handleManualSync}
-              disabled={isSyncing}
-              className="text-xs px-2.5 py-1 rounded bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 transition-colors disabled:opacity-50"
-            >
-              {isSyncing ? "..." : "Синхр. сейчас"}
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-          <div>
-            <div className="text-foreground/60">Последняя</div>
-            <div>{formatRelative(syncStatus?.lastSyncAt ?? null)}</div>
-          </div>
-          <div>
-            <div className="text-foreground/60">Следующая</div>
-            <div>{syncStatus?.autoSyncEnabled ? formatNext(syncStatus?.nextSyncAt ?? null) : "—"}</div>
-          </div>
-          <div>
-            <div className="text-foreground/60">Импортировано</div>
-            <div>{syncStatus?.lastSyncResult?.imported ?? 0} новых</div>
-          </div>
-        </div>
-
-        {syncStatus?.lastSyncResult && !syncStatus.lastSyncResult.success && (
-          <div className="text-xs text-red-400 bg-red-500/10 px-2 py-1 rounded">
-            {syncStatus.lastSyncResult.message}
+      {/* Синхронизация бирж */}
+      <div className="space-y-2">
+        <ExchangeCard
+          name="MEXC C2C"
+          color="orange"
+          sync={syncStatus?.mexc ?? null}
+          syncing={mexcSyncing}
+          onSyncNow={handleMexcSync}
+          onExport={() => window.open(`${BASE}api/mexc/c2c-export?format=csv&exchange=mexc`, "_blank")}
+        />
+        <ExchangeCard
+          name="Bybit P2P"
+          color="yellow"
+          sync={syncStatus?.bybit ?? null}
+          syncing={bybitSyncing}
+          onSyncNow={handleBybitSync}
+          onExport={() => window.open(`${BASE}api/mexc/c2c-export?format=csv&exchange=bybit`, "_blank")}
+        />
+        {syncStatus?.nextSyncAt && (
+          <div className="text-[10px] text-muted-foreground text-right">
+            Следующий авто-синк: {formatNext(syncStatus.nextSyncAt)}
           </div>
         )}
       </div>
@@ -390,9 +350,7 @@ export default function Trades() {
       <div className="flex gap-2 overflow-x-auto pb-1">
         {filters.map((f) => (
           <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors whitespace-nowrap ${
-              filter === f.key ? "bg-primary text-primary-foreground border-primary"
-              : "border-border text-muted-foreground hover:border-primary/50"}`}>
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors whitespace-nowrap ${filter === f.key ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}>
             {f.label}
           </button>
         ))}
@@ -418,14 +376,10 @@ export default function Trades() {
               </div>
               <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
                 <span>{trade.accountName ?? "—"}</span>
-                <span className="font-bold text-foreground">
-                  {trade.fiatAmount?.toLocaleString("ru", { maximumFractionDigits: 0 })} {trade.fiatCurrency}
-                </span>
+                <span className="font-bold text-foreground">{trade.fiatAmount?.toLocaleString("ru", { maximumFractionDigits: 0 })} {trade.fiatCurrency}</span>
               </div>
               {trade.counterpartyName && (
-                <div className="text-xs text-muted-foreground mb-1">
-                  Контрагент: <span className="text-foreground">{trade.counterpartyName}</span>
-                </div>
+                <div className="text-xs text-muted-foreground mb-1">Контрагент: <span className="text-foreground">{trade.counterpartyName}</span></div>
               )}
               <div className="text-xs text-muted-foreground">
                 {new Date(trade.createdAt).toLocaleString("ru", { dateStyle: "short", timeStyle: "short" })}
@@ -434,15 +388,13 @@ export default function Trades() {
               {(trade.status === "pending" || trade.status === "paid") && (
                 <div className="flex gap-2 mt-3">
                   {trade.status === "pending" && (
-                    <button onClick={() => confirmMutation.mutate({ id: trade.id }, { onSuccess: invalidate })}
-                      disabled={confirmMutation.isPending}
+                    <button onClick={() => confirmMutation.mutate({ id: trade.id }, { onSuccess: invalidate })} disabled={confirmMutation.isPending}
                       className="flex-1 text-xs px-3 py-1.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 transition-colors disabled:opacity-50">
                       Подтвердить оплату
                     </button>
                   )}
                   {trade.status === "paid" && (
-                    <button onClick={() => releaseMutation.mutate({ id: trade.id }, { onSuccess: invalidate })}
-                      disabled={releaseMutation.isPending}
+                    <button onClick={() => releaseMutation.mutate({ id: trade.id }, { onSuccess: invalidate })} disabled={releaseMutation.isPending}
                       className="flex-1 text-xs px-3 py-1.5 rounded bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition-colors disabled:opacity-50">
                       Выпустить крипту
                     </button>
@@ -452,26 +404,12 @@ export default function Trades() {
             </div>
           ))}
           {(!trades || trades.length === 0) && (
-            <div className="text-center py-10 space-y-3">
-              <div className="text-muted-foreground text-sm">
-                {isSyncing ? "Загружаем сделки из MEXC..." : "Сделок нет"}
+            <div className="text-center py-8 space-y-3">
+              <div className="text-muted-foreground text-sm">Сделок нет — идёт синхронизация...</div>
+              <div className="flex gap-2 justify-center flex-wrap">
+                <button onClick={() => setView("import")} className="text-xs px-3 py-2 rounded border border-border text-muted-foreground hover:border-primary/50">Импорт CSV</button>
+                <button onClick={() => setView("add")} className="text-xs px-3 py-2 rounded bg-primary/10 text-primary border border-primary/30">+ Добавить вручную</button>
               </div>
-              {!isSyncing && (
-                <div className="flex gap-2 justify-center flex-wrap">
-                  <button onClick={handleManualSync}
-                    className="text-xs px-3 py-2 rounded border border-orange-500/30 text-orange-400 bg-orange-500/10">
-                    Синхронизировать MEXC
-                  </button>
-                  <button onClick={() => setView("import")}
-                    className="text-xs px-3 py-2 rounded border border-border text-muted-foreground hover:border-primary/50">
-                    Импорт CSV
-                  </button>
-                  <button onClick={() => setView("add")}
-                    className="text-xs px-3 py-2 rounded bg-primary/10 text-primary border border-primary/30">
-                    + Добавить вручную
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>

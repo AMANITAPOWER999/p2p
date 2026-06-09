@@ -1,28 +1,40 @@
 import { logger } from "./logger";
 import { getMexcC2COrdersWeb, mapMexcStatusToInternal, mapMexcTradeType, type MexcC2CWebOrder } from "./mexc";
+import { getBybitP2POrders, mapBybitStatus, mapBybitSide, type BybitP2POrder } from "./bybit";
 import { db, tradesTable, accountsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
 const SYNC_INTERVAL_MS = 60 * 60 * 1000; // 1 час
 
+export interface ExchangeSyncResult {
+  success: boolean;
+  imported: number;
+  skipped: number;
+  totalFetched: number;
+  message: string;
+  rawSample?: unknown;
+}
+
 export interface SyncState {
-  lastSyncAt: Date | null;
-  lastSyncResult: {
-    success: boolean;
-    imported: number;
-    skipped: number;
-    totalFetched: number;
-    message: string;
-  } | null;
+  mexc: {
+    running: boolean;
+    lastSyncAt: Date | null;
+    lastResult: ExchangeSyncResult | null;
+    enabled: boolean;
+  };
+  bybit: {
+    running: boolean;
+    lastSyncAt: Date | null;
+    lastResult: ExchangeSyncResult | null;
+    enabled: boolean;
+  };
   nextSyncAt: Date | null;
-  running: boolean;
 }
 
 export const syncState: SyncState = {
-  lastSyncAt: null,
-  lastSyncResult: null,
+  mexc: { running: false, lastSyncAt: null, lastResult: null, enabled: false },
+  bybit: { running: false, lastSyncAt: null, lastResult: null, enabled: false },
   nextSyncAt: null,
-  running: false,
 };
 
 function parseNum(v: string | number | undefined): number {
@@ -31,170 +43,228 @@ function parseNum(v: string | number | undefined): number {
   return isNaN(n) ? 0 : n;
 }
 
-function normalizeOrder(o: MexcC2CWebOrder) {
-  const asset = (o.coin ?? o.asset ?? "USDT").toUpperCase();
-  const fiat = (o.fiatCurrency ?? o.fiat ?? "VND").toUpperCase();
-  const amount = parseNum(o.amount);
-  const price = parseNum(o.price);
-  const totalPrice = parseNum(o.totalPrice ?? o.orderTotalPrice ?? String(amount * price));
-  const completeTs = o.completedTime ?? o.completeTime ?? o.finishTime ?? null;
-  const counterparty = o.advertiserNickName ?? o.counterpartNickName ?? null;
-  return { asset, fiat, amount, price, totalPrice, completeTs, counterparty };
+async function getOrCreateAccount(exchange: "mexc" | "bybit", apiKey?: string): Promise<number> {
+  const existing = await db.select().from(accountsTable).where(eq(accountsTable.exchange, exchange)).limit(1);
+  if (existing.length > 0) return existing[0].id;
+
+  const [newAcc] = await db.insert(accountsTable).values({
+    name: exchange === "mexc" ? "MEXC C2C (авто)" : "Bybit P2P (авто)",
+    exchange,
+    ownerName: exchange === "mexc" ? "MEXC" : "Bybit",
+    bankName: "",
+    apiKey: apiKey ?? null,
+    apiSecret: null,
+  }).returning();
+  return newAcc.id;
 }
 
-export async function runMexcSync(webToken: string): Promise<typeof syncState.lastSyncResult> {
-  if (syncState.running) {
-    logger.info("MEXC auto-sync: already running, skipping");
-    return syncState.lastSyncResult;
-  }
+// ─── MEXC ────────────────────────────────────────────────────────────────────
 
-  syncState.running = true;
+export async function runMexcSync(webToken: string): Promise<ExchangeSyncResult> {
+  if (syncState.mexc.running) return syncState.mexc.lastResult ?? { success: false, imported: 0, skipped: 0, totalFetched: 0, message: "уже запущено" };
+  syncState.mexc.running = true;
   logger.info("MEXC auto-sync: starting");
 
   try {
-    let accId: number | null = null;
-    const accounts = await db.select().from(accountsTable).where(eq(accountsTable.exchange, "mexc")).limit(1);
-    if (accounts.length > 0) {
-      accId = accounts[0].id;
-    } else {
-      const [newAcc] = await db.insert(accountsTable).values({
-        name: "MEXC C2C (авто)",
-        exchange: "mexc",
-        ownerName: "MEXC",
-        bankName: "",
-        apiKey: webToken.trim(),
-        apiSecret: null,
-      }).returning();
-      accId = newAcc.id;
-    }
-
+    const accId = await getOrCreateAccount("mexc", webToken.trim());
     const PAGE_SIZE = 50;
-    let pageNum = 1;
-    let totalFetched = 0;
-    let imported = 0;
-    let skipped = 0;
-    let keepGoing = true;
+    let pageNum = 1, totalFetched = 0, imported = 0, skipped = 0, keepGoing = true;
+    let rawSample: unknown = null;
 
     while (keepGoing) {
       const result = await getMexcC2COrdersWeb(webToken.trim(), { pageNum, pageSize: PAGE_SIZE });
-
-      if (!result.orders || result.orders.length === 0) {
-        keepGoing = false;
-        break;
-      }
+      if (pageNum === 1) rawSample = result.rawResponse;
+      if (!result.orders?.length) break;
 
       totalFetched += result.orders.length;
-
       for (const order of result.orders) {
-        try {
-          const externalId = String(order.orderId);
-          if (externalId) {
-            const existing = await db
-              .select({ id: tradesTable.id })
-              .from(tradesTable)
-              .where(eq(tradesTable.exchangeTradeId, externalId))
-              .limit(1);
-            if (existing.length > 0) { skipped++; continue; }
-          }
-
-          const { asset, fiat, amount, price, totalPrice, completeTs, counterparty } = normalizeOrder(order);
-          const side = mapMexcTradeType(order.tradeType);
-          const status = mapMexcStatusToInternal(order.orderStatus);
-          const createdAt = order.createTime ? new Date(order.createTime) : new Date();
-          const completedAt = completeTs ? new Date(completeTs) : null;
-
-          await db.insert(tradesTable).values({
-            accountId: accId!,
-            exchangeTradeId: externalId || null,
-            side,
-            asset,
-            fiatCurrency: fiat,
-            amount,
-            price,
-            fiatAmount: totalPrice,
-            status,
-            counterpartyName: counterparty,
-            paymentMethod: order.paymentMethod ?? null,
-            createdAt,
-            completedAt: status === "completed" ? (completedAt ?? createdAt) : null,
-          });
-          imported++;
-        } catch (err) {
-          logger.warn({ err, orderId: order.orderId }, "Failed to insert C2C order");
-        }
+        const { didImport } = await insertMexcOrder(accId, order);
+        didImport ? imported++ : skipped++;
       }
-
-      if (result.orders.length < PAGE_SIZE) {
-        keepGoing = false;
-      } else {
-        pageNum++;
-        if (pageNum > 100) keepGoing = false;
-      }
+      keepGoing = result.orders.length >= PAGE_SIZE && pageNum < 100;
+      pageNum++;
     }
 
-    const [countRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(tradesTable)
-      .where(eq(tradesTable.accountId, accId!));
-    await db.update(accountsTable)
-      .set({ completedTrades: Number(countRow.count), updatedAt: new Date() })
-      .where(eq(accountsTable.id, accId!));
-
-    const result = {
-      success: true,
-      imported,
-      skipped,
-      totalFetched,
+    await refreshAccountStats(accId);
+    const res: ExchangeSyncResult = {
+      success: true, imported, skipped, totalFetched,
       message: `Найдено: ${totalFetched}, импортировано: ${imported}, дублей: ${skipped}`,
+      ...(totalFetched === 0 ? { rawSample } : {}),
     };
-
-    syncState.lastSyncAt = new Date();
-    syncState.lastSyncResult = result;
+    syncState.mexc.lastSyncAt = new Date();
+    syncState.mexc.lastResult = res;
     logger.info({ imported, skipped, totalFetched }, "MEXC auto-sync: completed");
-    return result;
+    return res;
   } catch (err) {
     logger.error({ err }, "MEXC auto-sync: failed");
-    const result = {
-      success: false,
-      imported: 0,
-      skipped: 0,
-      totalFetched: 0,
-      message: `Ошибка: ${(err as Error).message}`,
-    };
-    syncState.lastSyncAt = new Date();
-    syncState.lastSyncResult = result;
-    return result;
+    const res: ExchangeSyncResult = { success: false, imported: 0, skipped: 0, totalFetched: 0, message: `Ошибка: ${(err as Error).message}` };
+    syncState.mexc.lastSyncAt = new Date();
+    syncState.mexc.lastResult = res;
+    return res;
   } finally {
-    syncState.running = false;
+    syncState.mexc.running = false;
   }
 }
+
+async function insertMexcOrder(accId: number, order: MexcC2CWebOrder): Promise<{ didImport: boolean }> {
+  const externalId = String(order.orderId);
+  if (externalId) {
+    const existing = await db.select({ id: tradesTable.id }).from(tradesTable).where(eq(tradesTable.exchangeTradeId, externalId)).limit(1);
+    if (existing.length > 0) return { didImport: false };
+  }
+  const asset = (order.coin ?? order.asset ?? "USDT").toUpperCase();
+  const fiat = (order.fiatCurrency ?? order.fiat ?? "VND").toUpperCase();
+  const amount = parseNum(order.amount);
+  const price = parseNum(order.price);
+  const totalPrice = parseNum(order.totalPrice ?? order.orderTotalPrice ?? String(amount * price));
+  const completeTs = order.completedTime ?? order.completeTime ?? order.finishTime ?? null;
+  const counterparty = order.advertiserNickName ?? order.counterpartNickName ?? null;
+  const side = mapMexcTradeType(order.tradeType);
+  const status = mapMexcStatusToInternal(order.orderStatus);
+  const createdAt = order.createTime ? new Date(order.createTime) : new Date();
+  const completedAt = completeTs ? new Date(completeTs) : null;
+
+  await db.insert(tradesTable).values({
+    accountId: accId,
+    exchangeTradeId: externalId || null,
+    side, asset, fiatCurrency: fiat, amount, price, fiatAmount: totalPrice,
+    status, counterpartyName: counterparty, paymentMethod: order.paymentMethod ?? null,
+    createdAt, completedAt: status === "completed" ? (completedAt ?? createdAt) : null,
+  });
+  return { didImport: true };
+}
+
+// ─── BYBIT ───────────────────────────────────────────────────────────────────
+
+export async function runBybitSync(apiKey: string, apiSecret: string): Promise<ExchangeSyncResult> {
+  if (syncState.bybit.running) return syncState.bybit.lastResult ?? { success: false, imported: 0, skipped: 0, totalFetched: 0, message: "уже запущено" };
+  syncState.bybit.running = true;
+  logger.info("Bybit auto-sync: starting");
+
+  try {
+    const accId = await getOrCreateAccount("bybit", apiKey);
+    const PAGE_SIZE = 20;
+    let page = 1, totalFetched = 0, imported = 0, skipped = 0, keepGoing = true;
+    let rawSample: unknown = null;
+
+    while (keepGoing) {
+      const result = await getBybitP2POrders(apiKey, apiSecret, { page, size: PAGE_SIZE });
+      if (page === 1) rawSample = result.rawResponse;
+      if (!result.orders?.length) break;
+
+      totalFetched += result.orders.length;
+      for (const order of result.orders) {
+        const { didImport } = await insertBybitOrder(accId, order);
+        didImport ? imported++ : skipped++;
+      }
+      keepGoing = result.orders.length >= PAGE_SIZE && page < 100;
+      page++;
+    }
+
+    await refreshAccountStats(accId);
+    const res: ExchangeSyncResult = {
+      success: true, imported, skipped, totalFetched,
+      message: `Найдено: ${totalFetched}, импортировано: ${imported}, дублей: ${skipped}`,
+      ...(totalFetched === 0 ? { rawSample } : {}),
+    };
+    syncState.bybit.lastSyncAt = new Date();
+    syncState.bybit.lastResult = res;
+    logger.info({ imported, skipped, totalFetched }, "Bybit auto-sync: completed");
+    return res;
+  } catch (err) {
+    logger.error({ err }, "Bybit auto-sync: failed");
+    const res: ExchangeSyncResult = { success: false, imported: 0, skipped: 0, totalFetched: 0, message: `Ошибка: ${(err as Error).message}` };
+    syncState.bybit.lastSyncAt = new Date();
+    syncState.bybit.lastResult = res;
+    return res;
+  } finally {
+    syncState.bybit.running = false;
+  }
+}
+
+function parseBybitDate(v: string | number | null | undefined): Date | null {
+  if (!v) return null;
+  const ms = Number(v);
+  if (!isNaN(ms) && ms > 0) return new Date(ms);
+  return null;
+}
+
+async function insertBybitOrder(accId: number, order: BybitP2POrder): Promise<{ didImport: boolean }> {
+  // simplifyList uses "id"; full list uses "orderId"
+  const externalId = String(order.id ?? order.orderId ?? "");
+  if (externalId) {
+    const existing = await db.select({ id: tradesTable.id }).from(tradesTable).where(eq(tradesTable.exchangeTradeId, externalId)).limit(1);
+    if (existing.length > 0) return { didImport: false };
+  }
+  const asset = ((order.notifyTokenId ?? order.tokenId) ?? "USDT").toUpperCase();
+  const fiat = (order.currencyId ?? "USD").toUpperCase();
+  // simplifyList: notifyTokenQuantity = crypto qty, amount = fiat amount
+  const amount = parseNum(order.notifyTokenQuantity ?? order.quantity ?? "0");
+  const price = parseNum(order.price);
+  const fiatAmount = parseNum(order.amount);
+  const side = mapBybitSide(order.side);
+  // simplifyList uses "status"; full list uses "orderStatus"
+  const statusCode = order.status ?? order.orderStatus ?? 0;
+  const status = mapBybitStatus(statusCode);
+  const createdAt = parseBybitDate(order.createDate) ?? new Date();
+  const completedAt = parseBybitDate(order.finishDate ?? null);
+  const counterparty = order.targetNickName ?? order.nickName ?? (order.paymentInfo?.[0]?.realName) ?? null;
+
+  await db.insert(tradesTable).values({
+    accountId: accId,
+    exchangeTradeId: externalId || null,
+    side, asset, fiatCurrency: fiat, amount, price, fiatAmount,
+    status, counterpartyName: counterparty, paymentMethod: null,
+    createdAt, completedAt: status === "completed" ? (completedAt ?? createdAt) : null,
+  });
+  return { didImport: true };
+}
+
+// ─── Shared ───────────────────────────────────────────────────────────────────
+
+async function refreshAccountStats(accId: number) {
+  const [countRow] = await db.select({ count: sql<number>`count(*)` }).from(tradesTable).where(eq(tradesTable.accountId, accId));
+  await db.update(accountsTable).set({ completedTrades: Number(countRow.count), updatedAt: new Date() }).where(eq(accountsTable.id, accId));
+}
+
+// ─── Scheduler ────────────────────────────────────────────────────────────────
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startAutoSync(): void {
-  const token = process.env["MEXC_WEB_TOKEN"];
-  if (!token) {
-    logger.warn("MEXC_WEB_TOKEN not set — auto-sync disabled");
+  const mexcToken = process.env["MEXC_WEB_TOKEN"];
+  const bybitKey = process.env["BYBIT_API_KEY"];
+  const bybitSecret = process.env["BYBIT_API_SECRET"];
+
+  syncState.mexc.enabled = !!mexcToken;
+  syncState.bybit.enabled = !!(bybitKey && bybitSecret);
+
+  if (!syncState.mexc.enabled && !syncState.bybit.enabled) {
+    logger.warn("No exchange credentials set — auto-sync disabled");
     return;
   }
 
-  logger.info({ intervalMs: SYNC_INTERVAL_MS }, "MEXC auto-sync: scheduler started");
+  logger.info({ mexc: syncState.mexc.enabled, bybit: syncState.bybit.enabled, intervalMs: SYNC_INTERVAL_MS }, "Auto-sync: scheduler started");
 
-  // первый запуск сразу
-  runMexcSync(token).catch((err) => logger.error({ err }, "MEXC initial sync failed"));
+  const runAll = () => {
+    if (syncState.mexc.enabled) {
+      const t = process.env["MEXC_WEB_TOKEN"]!;
+      runMexcSync(t).catch(err => logger.error({ err }, "MEXC periodic sync failed"));
+    }
+    if (syncState.bybit.enabled) {
+      const k = process.env["BYBIT_API_KEY"]!;
+      const s = process.env["BYBIT_API_SECRET"]!;
+      runBybitSync(k, s).catch(err => logger.error({ err }, "Bybit periodic sync failed"));
+    }
+  };
 
-  syncInterval = setInterval(() => {
-    const t = process.env["MEXC_WEB_TOKEN"];
-    if (!t) return;
-    runMexcSync(t).catch((err) => logger.error({ err }, "MEXC periodic sync failed"));
-  }, SYNC_INTERVAL_MS);
+  // Первый запуск сразу
+  runAll();
 
+  syncInterval = setInterval(runAll, SYNC_INTERVAL_MS);
   syncState.nextSyncAt = new Date(Date.now() + SYNC_INTERVAL_MS);
 }
 
 export function stopAutoSync(): void {
-  if (syncInterval) {
-    clearInterval(syncInterval);
-    syncInterval = null;
-  }
+  if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
 }
