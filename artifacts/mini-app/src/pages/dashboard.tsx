@@ -144,7 +144,7 @@ export default function Dashboard() {
 
   // Filters
   const [activeUser, setActiveUser] = useState<string | null>("Manunin A");
-  const [activeBank, setActiveBank] = useState<string | null>(null);
+  const [activeBank, setActiveBank] = useState<string | null>("Vietcombank");
   const [activeExchange, setActiveExchange] = useState<string | null>(null);
   const [enabledExchanges, setEnabledExchanges] = useState<Set<string>>(new Set(["OKX", "Bybit"]));
   function toggleExchangeEnabled(ex: string) {
@@ -219,6 +219,27 @@ export default function Dashboard() {
     const id = setInterval(fetchStatus, 20000);
     return () => clearInterval(id);
   }, []);
+
+  // Авто-переключение банка при исчерпании лимита
+  useEffect(() => {
+    if (!allTrades) return;
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    function usedToday(bank: string) {
+      return allTrades!.filter(t =>
+        t.status === "completed" &&
+        new Date(t.createdAt) >= todayStart &&
+        ((t.paymentMethod ?? "").toLowerCase().includes(bank.toLowerCase()) ||
+         (t.counterpartyName ?? "").toLowerCase().includes(bank.toLowerCase()))
+      ).reduce((s, t) => s + (t.fiatAmount ?? 0), 0);
+    }
+    // Найти первый банк у которого лимит не исчерпан
+    const available = BANKS.find(b => usedToday(b) < (BANK_LIMIT[b] ?? 0));
+    if (!available) return; // все лимиты исчерпаны — не трогаем
+    // Если текущий банк исчерпан — переключиться
+    if (activeBank && usedToday(activeBank) >= (BANK_LIMIT[activeBank] ?? 0)) {
+      setActiveBank(available);
+    }
+  }, [allTrades]);
 
   async function handleSync(exchange: "mexc" | "bybit") {
     setSyncing(exchange);
