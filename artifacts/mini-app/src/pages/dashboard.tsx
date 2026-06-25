@@ -249,7 +249,7 @@ export default function Dashboard() {
 
       {/* ── Фильтры ── */}
       <div className="px-3 pb-3 space-y-2">
-        {/* Банки: 3 равных колонки */}
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Банки</p>
         <div className="grid grid-cols-3 gap-2">
           {BANKS.map(b => (
             <Chip key={b} label={b} active={activeBank === b}
@@ -257,7 +257,7 @@ export default function Dashboard() {
               onClick={() => setActiveBank(activeBank === b ? null : b)} />
           ))}
         </div>
-        {/* Биржи: 3 колонки, 2 ряда */}
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground pt-1">Биржи</p>
         <div className="grid grid-cols-3 gap-2">
           {EXCHANGES.map(ex => (
             <Chip key={ex} label={ex} active={activeExchange === ex}
@@ -265,12 +265,6 @@ export default function Dashboard() {
               onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
           ))}
         </div>
-        {(activeBank || activeExchange || statusFilter !== "all") && (
-          <button onClick={() => { setActiveBank(null); setActiveExchange(null); setStatusFilter("all"); }}
-            className="w-full text-sm px-4 py-2 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 font-medium">
-            ✕ Сброс
-          </button>
-        )}
       </div>
 
       <div className="px-3 space-y-4">
