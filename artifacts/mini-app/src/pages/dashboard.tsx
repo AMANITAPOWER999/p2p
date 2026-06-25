@@ -134,10 +134,13 @@ export default function Dashboard() {
   const releaseMutation = useReleaseCrypto();
 
   // Filters
+  const [activeUser, setActiveUser] = useState<string | null>(null);
   const [activeBank, setActiveBank] = useState<string | null>(null);
   const [activeExchange, setActiveExchange] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tradesLimit, setTradesLimit] = useState(20);
+
+  const USERS = ["Manunin A", "Sazykin V"];
 
   // Sync state
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
@@ -188,6 +191,11 @@ export default function Dashboard() {
 
   // Apply filters
   const filteredTrades = (allTrades ?? []).filter(t => {
+    if (activeUser) {
+      const lastName = activeUser.split(" ")[0].toLowerCase();
+      if (!(t.accountName ?? "").toLowerCase().includes(lastName) &&
+          !(t.counterpartyName ?? "").toLowerCase().includes(lastName)) return false;
+    }
     if (activeExchange && (t.exchange ?? "").toLowerCase() !== activeExchange.toLowerCase() &&
         (t.accountName ?? "").toLowerCase().indexOf(activeExchange.toLowerCase()) === -1) return false;
     if (activeBank && !(t.paymentMethod ?? "").toLowerCase().includes(activeBank.toLowerCase()) &&
@@ -229,30 +237,46 @@ export default function Dashboard() {
 
       {/* ── Навигация под логотипом ── */}
       {(() => {
-        const NAV_ITEMS = [
-          { icon: LayoutDashboard, label: "Turbo",   anchor: null },
-          { icon: ArrowRightLeft,  label: "Сделки",  anchor: "trades" },
-          { icon: ListOrdered,     label: "Ордера",  anchor: "orders" },
-          { icon: WalletCards,     label: "Акк",     anchor: "accounts" },
-          { icon: BarChart3,       label: "Синк",    anchor: "sync" },
+        const NAV_SCROLL = [
+          { icon: ArrowRightLeft, label: "Сделки",  anchor: "trades" },
+          { icon: ListOrdered,    label: "Ордера",  anchor: "orders" },
+          { icon: WalletCards,    label: "Акк",     anchor: "accounts" },
+          { icon: BarChart3,      label: "Синк",    anchor: "sync" },
         ];
-        function scrollTo(anchor: string | null) {
-          if (!anchor) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+        function scrollTo(anchor: string) {
           document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
         return (
-          <div className="flex items-center justify-around px-2 py-1 mx-3 mb-2 rounded-xl border border-white/10"
-            style={{ background: "rgba(255,255,255,0.05)" }}>
-            {NAV_ITEMS.map(item => {
-              const Icon = item.icon;
-              return (
-                <button key={item.label} onClick={() => scrollTo(item.anchor)}
-                  className="flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-lg text-muted-foreground hover:text-primary transition-colors">
-                  <Icon className="w-5 h-5" />
-                  <span className="text-[10px] font-medium">{item.label}</span>
+          <div className="flex items-stretch px-2 mb-2 gap-2 mx-3">
+            {/* Пикер пользователя */}
+            <div className="flex flex-col gap-1 flex-shrink-0 rounded-xl border border-white/10 px-2 py-1.5"
+              style={{ background: "rgba(255,255,255,0.05)" }}>
+              {USERS.map(u => (
+                <button key={u} onClick={() => setActiveUser(activeUser === u ? null : u)}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold transition-all whitespace-nowrap"
+                  style={activeUser === u
+                    ? { background: "rgba(77,166,255,0.2)", color: "#4da6ff", border: "1px solid rgba(77,166,255,0.4)" }
+                    : { color: "rgba(255,255,255,0.5)", border: "1px solid transparent" }}>
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ background: activeUser === u ? "#4da6ff" : "rgba(255,255,255,0.3)" }} />
+                  {u}
                 </button>
-              );
-            })}
+              ))}
+            </div>
+            {/* Навигация-скролл */}
+            <div className="flex flex-1 items-center justify-around rounded-xl border border-white/10 px-1 py-1"
+              style={{ background: "rgba(255,255,255,0.05)" }}>
+              {NAV_SCROLL.map(item => {
+                const Icon = item.icon;
+                return (
+                  <button key={item.label} onClick={() => scrollTo(item.anchor)}
+                    className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-muted-foreground hover:text-primary transition-colors">
+                    <Icon className="w-5 h-5" />
+                    <span className="text-[10px] font-medium">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         );
       })()}
