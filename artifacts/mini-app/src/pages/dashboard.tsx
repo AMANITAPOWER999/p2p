@@ -160,7 +160,7 @@ export default function Dashboard() {
   const USERS = ["Manunin A", "Sazykin V"];
 
   // Order panel state
-  const [orderMode, setOrderMode] = useState<null | "manual" | "auto">(null);
+  const [orderMode, setOrderMode] = useState<null | "manual" | "auto">("manual");
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
   const [orderCoin, setOrderCoin] = useState("USDT");
   const [orderCurrency] = useState("VND");
@@ -432,8 +432,9 @@ export default function Dashboard() {
           className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border font-semibold text-sm transition-all ${
             orderMode === "manual"
               ? "bg-blue-500/20 text-blue-400 border-blue-500/40"
-              : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-blue-500/30"
-          }`}>
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          style={orderMode !== "manual" ? { background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" } : {}}>
           <SlidersHorizontal className="w-4 h-4" />
           Ручной режим
         </button>
@@ -441,8 +442,9 @@ export default function Dashboard() {
           className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border font-semibold text-sm transition-all ${
             orderMode === "auto"
               ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
-              : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-yellow-500/30"
-          }`}>
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          style={orderMode !== "auto" ? { background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" } : {}}>
           <Zap className="w-4 h-4" />
           Авто курс
         </button>
