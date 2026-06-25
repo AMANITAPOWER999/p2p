@@ -404,7 +404,11 @@ export default function Dashboard() {
               <div key={ex} className="relative">
                 <Chip label={ex} active={activeExchange === ex}
                   brandKey={ex}
-                  onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
+                  onClick={() => {
+                    const next = activeExchange === ex ? null : ex;
+                    setActiveExchange(next);
+                    if (next) setTimeout(() => document.getElementById("trades")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }} />
                 {/* Галочка вкл/выкл */}
                 <button
                   onClick={e => { e.stopPropagation(); toggleExchangeEnabled(ex); }}
