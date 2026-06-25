@@ -26,7 +26,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 const STATUS_LABEL: Record<string, string> = {
   pending: "Ожидание", paid: "Оплачено", completed: "Завершено",
-  cancelled: "Отменено", disputed: "Спор",
+  cancelled: "Отменено", disputed: "Апелляции",
 };
 // Brand colors for exchange chips (bg, text, border)
 const EXCHANGE_BRAND: Record<string, { bg: string; color: string; border: string }> = {
@@ -745,7 +745,7 @@ export default function Dashboard() {
       {/* ── Все сделки ── */}
       <SectionTitle id="trades">Сделки</SectionTitle>
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-        {(["all","pending","paid","completed","cancelled"] as const).map(s => (
+        {(["all","pending","paid","completed","cancelled","disputed"] as const).map(s => (
           <button key={s} onClick={() => setStatusFilter(s)}
             className={`text-xs px-2.5 py-1 rounded-full border whitespace-nowrap transition-colors ${
               statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/40"
