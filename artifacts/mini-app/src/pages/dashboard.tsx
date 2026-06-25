@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { LayoutDashboard, ArrowRightLeft, ListOrdered, WalletCards, BarChart3 } from "lucide-react";
 import {
   useGetDashboardStats,
   useListTrades,
@@ -94,7 +95,7 @@ function Chip({ label, active, color, brandKey, bankKey, onClick }: {
     <button
       onClick={onClick}
       style={active ? (brand ? activeStyle : {}) : (brand ? inactiveStyle : {})}
-      className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border font-medium transition-all whitespace-nowrap ${
+      className={`flex items-center gap-2 text-sm px-4 py-2 rounded-full border font-semibold transition-all whitespace-nowrap ${
         !brand
           ? active
             ? color ?? "bg-primary text-primary-foreground border-primary"
@@ -105,7 +106,7 @@ function Chip({ label, active, color, brandKey, bankKey, onClick }: {
       }`}
     >
       {iconSrc && (
-        <img src={iconSrc} alt="" className="w-3.5 h-3.5 rounded-sm object-contain flex-shrink-0"
+        <img src={iconSrc} alt="" className="w-5 h-5 rounded-sm object-contain flex-shrink-0"
           onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
       )}
       {label}
@@ -216,16 +217,46 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Навигация под логотипом ── */}
+      {(() => {
+        const NAV_ITEMS = [
+          { icon: LayoutDashboard, label: "Turbo",   anchor: null },
+          { icon: ArrowRightLeft,  label: "Сделки",  anchor: "trades" },
+          { icon: ListOrdered,     label: "Ордера",  anchor: "orders" },
+          { icon: WalletCards,     label: "Акк",     anchor: "accounts" },
+          { icon: BarChart3,       label: "Синк",    anchor: "sync" },
+        ];
+        function scrollTo(anchor: string | null) {
+          if (!anchor) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+          document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        return (
+          <div className="flex items-center justify-around px-2 py-1 mx-3 mb-2 rounded-xl border border-white/10"
+            style={{ background: "rgba(255,255,255,0.05)" }}>
+            {NAV_ITEMS.map(item => {
+              const Icon = item.icon;
+              return (
+                <button key={item.label} onClick={() => scrollTo(item.anchor)}
+                  className="flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-lg text-muted-foreground hover:text-primary transition-colors">
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[10px] font-medium">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* ── Фильтры ── */}
-      <div className="px-3 pb-3 space-y-2">
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+      <div className="px-3 pb-3 space-y-2.5">
+        <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
           {BANKS.map(b => (
             <Chip key={b} label={b} active={activeBank === b}
               color={BANK_COLOR[b]} bankKey={b}
               onClick={() => setActiveBank(activeBank === b ? null : b)} />
           ))}
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
           {EXCHANGES.map(ex => (
             <Chip key={ex} label={ex} active={activeExchange === ex}
               brandKey={ex}
@@ -233,7 +264,7 @@ export default function Dashboard() {
           ))}
           {(activeBank || activeExchange || statusFilter !== "all") && (
             <button onClick={() => { setActiveBank(null); setActiveExchange(null); setStatusFilter("all"); }}
-              className="text-xs px-2.5 py-1 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 whitespace-nowrap">
+              className="text-sm px-4 py-2 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 whitespace-nowrap font-medium">
               ✕ Сброс
             </button>
           )}
