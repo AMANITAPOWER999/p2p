@@ -469,7 +469,8 @@ export default function Dashboard() {
               ))}
             </div>
             <select value={orderCoin} onChange={e => setOrderCoin(e.target.value)}
-              className="rounded-lg border border-border bg-card text-xs font-semibold px-2 py-1.5 text-foreground">
+              className="rounded-lg border text-xs font-semibold px-2 py-1.5 text-foreground"
+              style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
               {["USDT", "BTC", "ETH"].map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
@@ -509,13 +510,15 @@ export default function Dashboard() {
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Цена (₫)</label>
               <input type="number" value={manualPrice} onChange={e => setManualPrice(e.target.value)}
                 placeholder="Введите курс"
-                className="w-full rounded-lg border border-border bg-card text-sm px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60" />
+                className="w-full rounded-lg border text-sm px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground focus:outline-none"
+                style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }} />
             </div>
             <div className="space-y-1">
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Кол-во ({orderCoin})</label>
               <input type="number" value={manualAmount} onChange={e => setManualAmount(e.target.value)}
                 placeholder="Объём"
-                className="w-full rounded-lg border border-border bg-card text-sm px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60" />
+                className="w-full rounded-lg border text-sm px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground focus:outline-none"
+                style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }} />
             </div>
           </div>
 
@@ -720,7 +723,8 @@ export default function Dashboard() {
       ) : (
         <div className="space-y-2">
           {accounts.map(acc => (
-            <div key={acc.id} className="bg-card border border-border rounded-lg p-3 text-sm flex items-center justify-between">
+            <div key={acc.id} className="rounded-lg border p-3 text-sm flex items-center justify-between"
+              style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
               <div>
                 <div className="font-medium">{acc.name}</div>
                 <div className="text-xs text-muted-foreground">{acc.exchange?.toUpperCase()} · {acc.ownerName}</div>
@@ -750,7 +754,8 @@ function TradeCard({ trade, onConfirm, onRelease, confirmPending, releasePending
   const exBrand = exchangeLabel ? EXCHANGE_BRAND[exchangeLabel.toLowerCase()] : null;
 
   return (
-    <div className="bg-card border border-border rounded-lg p-3 text-sm">
+    <div className="rounded-lg border p-3 text-sm"
+      style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
       <div className="flex justify-between items-start mb-1.5">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className={`text-xs font-bold ${trade.side === "buy" ? "text-green-400" : "text-red-400"}`}>
