@@ -356,7 +356,7 @@ export default function Dashboard() {
       })()}
 
       {/* ── Фильтры ── */}
-      <div className="px-3 pb-6 space-y-3">
+      <div className="px-3 pt-4 pb-6 space-y-3">
         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Банки</p>
         <div className="grid grid-cols-3 gap-2">
           {BANKS.map(b => (
