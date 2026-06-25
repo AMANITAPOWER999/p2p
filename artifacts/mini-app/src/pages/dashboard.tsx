@@ -427,8 +427,8 @@ export default function Dashboard() {
 
       {/* Панель ордера */}
       {orderMode && (
-        <div className="rounded-xl border border-white/10 p-3 space-y-3"
-          style={{ background: "rgba(255,255,255,0.04)" }}>
+        <div className="rounded-xl border p-3 space-y-3"
+          style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
 
           {/* Сторона + монета */}
           <div className="flex gap-2">
@@ -536,31 +536,26 @@ export default function Dashboard() {
 
       <SectionTitle id="stats">Статистика</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-card border border-border rounded-lg p-3">
-          <div className="text-[10px] text-muted-foreground mb-0.5">Объём сегодня</div>
-          <div className="text-lg font-bold">{(stats?.todayVolume ?? 0).toLocaleString("ru", { maximumFractionDigits: 0 })} ₫</div>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-3">
-          <div className="text-[10px] text-muted-foreground mb-0.5">Прибыль сегодня</div>
-          <div className="text-lg font-bold text-green-400">{(stats?.todayProfit ?? 0).toLocaleString("ru", { maximumFractionDigits: 2 })} $</div>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-3">
-          <div className="text-[10px] text-muted-foreground mb-0.5">Активных</div>
-          <div className="text-lg font-bold text-yellow-400">{activeTrades.length}</div>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-3">
-          <div className="text-[10px] text-muted-foreground mb-0.5">
-            {(activeBank || activeExchange) ? "По фильтру" : "Всего сделок"}
+        {[
+          { label: "Объём сегодня",  value: `${(stats?.todayVolume ?? 0).toLocaleString("ru", { maximumFractionDigits: 0 })} ₫`, cls: "text-foreground" },
+          { label: "Прибыль сегодня", value: `${(stats?.todayProfit ?? 0).toLocaleString("ru", { maximumFractionDigits: 2 })} $`, cls: "text-green-400" },
+          { label: "Активных",       value: `${activeTrades.length}`,    cls: "text-yellow-400" },
+          { label: (activeBank || activeExchange) ? "По фильтру" : "Всего сделок", value: `${filteredTrades.length}`, cls: "text-foreground" },
+        ].map(({ label, value, cls }) => (
+          <div key={label} className="rounded-lg border p-3"
+            style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
+            <div className="text-[10px] text-muted-foreground mb-0.5">{label}</div>
+            <div className={`text-lg font-bold ${cls}`}>{value}</div>
           </div>
-          <div className="text-lg font-bold">{filteredTrades.length}</div>
-        </div>
+        ))}
       </div>
 
       {/* ── Синк / Авто-выпуск ── */}
       <SectionTitle id="sync">Синхронизация</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
         {/* MEXC */}
-        <div className="bg-card border border-border rounded-lg p-2.5 space-y-1.5">
+        <div className="rounded-lg border p-2.5 space-y-1.5"
+          style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full ${syncStatus?.mexc.running ? "bg-yellow-400 animate-pulse" : syncStatus?.mexc.enabled ? "bg-green-400" : "bg-muted-foreground"}`} />
@@ -577,7 +572,8 @@ export default function Dashboard() {
           </div>
         </div>
         {/* Bybit */}
-        <div className="bg-card border border-border rounded-lg p-2.5 space-y-1.5">
+        <div className="rounded-lg border p-2.5 space-y-1.5"
+          style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full ${syncStatus?.bybit.running ? "bg-yellow-400 animate-pulse" : syncStatus?.bybit.enabled ? "bg-green-400" : "bg-muted-foreground"}`} />
@@ -595,7 +591,10 @@ export default function Dashboard() {
         </div>
       </div>
       {/* Авто-выпуск */}
-      <div className={`rounded-lg border p-2.5 flex items-center justify-between transition-colors ${autoRelease?.enabled ? "bg-green-500/5 border-green-500/30" : "bg-card border-border"}`}>
+      <div className="rounded-lg border p-2.5 flex items-center justify-between transition-colors"
+        style={autoRelease?.enabled
+          ? { background: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.35)" }
+          : { background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
         <div className="flex items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full ${autoRelease?.running ? "bg-yellow-400 animate-pulse" : autoRelease?.enabled ? "bg-green-400" : "bg-muted-foreground"}`} />
           <div>
