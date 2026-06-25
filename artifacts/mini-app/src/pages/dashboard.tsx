@@ -96,9 +96,9 @@ const EXCHANGE_ICON: Record<string, string> = {
 };
 
 const BANK_ICON: Record<string, string> = {
-  Vietcombank: `${import.meta.env.BASE_URL}logos/vietcombank.png`,
-  Vietinbank:  `${import.meta.env.BASE_URL}logos/vietinbank.png`,
-  BIDV:        `${import.meta.env.BASE_URL}logos/bidv.png`,
+  Vietcombank: "https://www.google.com/s2/favicons?domain=vietcombank.com.vn&sz=32",
+  Vietinbank:  "https://www.google.com/s2/favicons?domain=vietinbank.com.vn&sz=32",
+  BIDV:        "https://www.google.com/s2/favicons?domain=bidv.com.vn&sz=32",
 };
 
 function Chip({ label, active, color, brandKey, bankKey, onClick }: {
