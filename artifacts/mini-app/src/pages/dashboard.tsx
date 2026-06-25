@@ -138,7 +138,7 @@ export default function Dashboard() {
   const releaseMutation = useReleaseCrypto();
 
   // Filters
-  const [activeUser, setActiveUser] = useState<string | null>(null);
+  const [activeUser, setActiveUser] = useState<string | null>("Manunin A");
   const [activeBank, setActiveBank] = useState<string | null>(null);
   const [activeExchange, setActiveExchange] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -294,8 +294,9 @@ export default function Dashboard() {
                   style={activeUser === u
                     ? { background: "rgba(77,166,255,0.2)", color: "#4da6ff", border: "1px solid rgba(77,166,255,0.4)" }
                     : { color: "rgba(255,255,255,0.5)", border: "1px solid transparent" }}>
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ background: activeUser === u ? "#4da6ff" : "rgba(255,255,255,0.3)" }} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 transition-all ${activeUser === u ? "animate-pulse" : ""}`}
+                    style={{ background: activeUser === u ? "#22c55e" : "rgba(255,255,255,0.2)",
+                      boxShadow: activeUser === u ? "0 0 6px #22c55e" : "none" }} />
                   {u}
                 </button>
               ))}
