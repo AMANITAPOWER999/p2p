@@ -3,7 +3,7 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
-router.get("/api/p2p/market-price", async (req, res) => {
+router.get("/p2p/market-price", async (req, res) => {
   const exchange = ((req.query.exchange as string) ?? "bybit").toLowerCase();
   const side     = ((req.query.side as string) ?? "BUY").toUpperCase();
   const coin     = (req.query.coin as string) ?? "USDT";
