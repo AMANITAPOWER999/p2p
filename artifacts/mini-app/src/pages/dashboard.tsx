@@ -176,21 +176,22 @@ export default function Dashboard() {
         {/* Звёздная сетка */}
         <div className="absolute inset-0 opacity-20"
           style={{ backgroundImage: "radial-gradient(circle at 20% 80%, #1a3a6e 0%, transparent 50%), radial-gradient(circle at 80% 20%, #1a3a6e 0%, transparent 50%)" }} />
-        <div className="relative flex items-center gap-3 px-4 pt-4 pb-3">
+        <div className="relative flex flex-col items-center pt-6 pb-2">
           <img
             src={`${import.meta.env.BASE_URL}turbo-mammoth-logo.png`}
             alt="Turbo Mammoth"
-            className="w-16 h-16 object-contain drop-shadow-lg flex-shrink-0"
+            className="w-48 h-48 object-contain drop-shadow-2xl"
+            style={{ filter: "drop-shadow(0 0 24px rgba(77,166,255,0.35))" }}
           />
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black tracking-tight"
+          <div className="text-center mt-1">
+            <div className="flex items-baseline justify-center gap-2">
+              <span className="text-3xl font-black tracking-tight"
                 style={{ background: "linear-gradient(90deg, #4da6ff, #f7a600)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 TURBO
               </span>
-              <span className="text-xl font-black tracking-tight text-white">MAMMOTH</span>
+              <span className="text-3xl font-black tracking-tight text-white">MAMMOTH</span>
             </div>
-            <div className="text-[10px] font-semibold tracking-widest uppercase"
+            <div className="text-[11px] font-semibold tracking-widest uppercase mt-0.5"
               style={{ color: "#4da6ff" }}>
               ›› P2P Trading &amp; Bot ‹‹
             </div>

@@ -65,16 +65,16 @@
 }
 
 :root {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --card-border: 240 3.7% 15.9%;
+  --background: 214 60% 10%;
+  --foreground: 0 0% 96%;
+  --border: 214 40% 20%;
+  --card: 214 50% 14%;
+  --card-foreground: 0 0% 96%;
+  --card-border: 214 40% 20%;
   
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --popover-border: 240 3.7% 15.9%;
+  --popover: 214 55% 12%;
+  --popover-foreground: 0 0% 96%;
+  --popover-border: 214 40% 20%;
   
   --primary: 217.2 91.2% 59.8%;
   --primary-foreground: 0 0% 98%;
