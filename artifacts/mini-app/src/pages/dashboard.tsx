@@ -478,7 +478,7 @@ export default function Dashboard() {
             <select value={orderCoin} onChange={e => setOrderCoin(e.target.value)}
               className="rounded-lg border text-xs font-semibold px-2 py-1.5 text-foreground"
               style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
-              {["USDT", "BTC", "ETH"].map(c => <option key={c}>{c}</option>)}
+              {["USDT", "VND"].map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
 
