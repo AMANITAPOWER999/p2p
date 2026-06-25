@@ -27,13 +27,19 @@ const STATUS_LABEL: Record<string, string> = {
   pending: "Ожидание", paid: "Оплачено", completed: "Завершено",
   cancelled: "Отменено", disputed: "Спор",
 };
+// Brand colors for exchange chips (bg, text, border)
+const EXCHANGE_BRAND: Record<string, { bg: string; color: string; border: string }> = {
+  okx:     { bg: "rgba(0,0,0,0.6)",       color: "#ffffff",  border: "rgba(255,255,255,0.2)" },
+  bybit:   { bg: "rgba(247,166,0,0.15)",  color: "#F7A600",  border: "rgba(247,166,0,0.4)"  },
+  binance: { bg: "rgba(240,185,11,0.15)", color: "#F0B90B",  border: "rgba(240,185,11,0.4)" },
+  gate:    { bg: "rgba(35,84,230,0.15)",  color: "#5b8ef5",  border: "rgba(35,84,230,0.4)"  },
+  kucoin:  { bg: "rgba(0,216,149,0.12)",  color: "#00D895",  border: "rgba(0,216,149,0.4)"  },
+  mexc:    { bg: "rgba(43,110,251,0.15)", color: "#5b96ff",  border: "rgba(43,110,251,0.4)" },
+};
+
+// Fallback class-based colors (unused keys)
 const EXCHANGE_COLOR: Record<string, string> = {
-  bybit: "bg-yellow-400/10 text-yellow-300 border-yellow-400/20",
-  binance: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-  mexc: "bg-blue-400/10 text-blue-300 border-blue-400/20",
-  okx: "bg-white/10 text-white/70 border-white/15",
-  gate: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  kucoin: "bg-green-400/10 text-green-300 border-green-400/20",
+  bybit: "", binance: "", mexc: "", okx: "", gate: "", kucoin: "",
 };
 const BANK_COLOR: Record<string, string> = {
   Vietcombank: "bg-green-500/10 text-green-400 border-green-500/20",
@@ -60,14 +66,23 @@ function SectionTitle({ id, children }: { id?: string; children: React.ReactNode
   );
 }
 
-function Chip({ label, active, color, onClick }: { label: string; active: boolean; color?: string; onClick: () => void }) {
+function Chip({ label, active, color, brandKey, onClick }: { label: string; active: boolean; color?: string; brandKey?: string; onClick: () => void }) {
+  const brand = brandKey ? EXCHANGE_BRAND[brandKey.toLowerCase()] : null;
+  const activeStyle = brand ? { background: brand.bg, color: brand.color, borderColor: brand.border } : {};
+  const inactiveStyle = brand && active === false ? { borderColor: brand.border + "55", color: brand.color + "88" } : {};
+
   return (
     <button
       onClick={onClick}
+      style={active ? activeStyle : inactiveStyle}
       className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-all whitespace-nowrap ${
-        active
-          ? color ?? "bg-primary text-primary-foreground border-primary"
-          : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+        !brand
+          ? active
+            ? color ?? "bg-primary text-primary-foreground border-primary"
+            : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          : active
+            ? ""
+            : "border-border text-muted-foreground hover:text-foreground"
       }`}
     >
       {label}
@@ -153,37 +168,61 @@ export default function Dashboard() {
   const totalVolume = filteredTrades.filter(t => t.status === "completed").reduce((s, t) => s + (t.fiatAmount ?? 0), 0);
 
   return (
-    <div className="p-3 space-y-4 max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto">
 
-      {/* ── Фильтры ── */}
-      <div className="space-y-2">
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-          {BANKS.map(b => (
-            <Chip key={b} label={b} active={activeBank === b}
-              color={BANK_COLOR[b]}
-              onClick={() => setActiveBank(activeBank === b ? null : b)} />
-          ))}
+      {/* ── Hero Header ── */}
+      <div className="relative overflow-hidden rounded-b-2xl mb-4"
+        style={{ background: "linear-gradient(135deg, #0a1628 0%, #0d1f3c 50%, #0a1628 100%)" }}>
+        {/* Звёздная сетка */}
+        <div className="absolute inset-0 opacity-20"
+          style={{ backgroundImage: "radial-gradient(circle at 20% 80%, #1a3a6e 0%, transparent 50%), radial-gradient(circle at 80% 20%, #1a3a6e 0%, transparent 50%)" }} />
+        <div className="relative flex items-center gap-3 px-4 pt-4 pb-3">
+          <img
+            src={`${import.meta.env.BASE_URL}turbo-mammoth-logo.png`}
+            alt="Turbo Mammoth"
+            className="w-16 h-16 object-contain drop-shadow-lg flex-shrink-0"
+          />
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xl font-black tracking-tight"
+                style={{ background: "linear-gradient(90deg, #4da6ff, #f7a600)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                TURBO
+              </span>
+              <span className="text-xl font-black tracking-tight text-white">MAMMOTH</span>
+            </div>
+            <div className="text-[10px] font-semibold tracking-widest uppercase"
+              style={{ color: "#4da6ff" }}>
+              ›› P2P Trading &amp; Bot ‹‹
+            </div>
+          </div>
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-          {EXCHANGES.map(ex => (
-            <Chip key={ex} label={ex} active={activeExchange === ex}
-              color={EXCHANGE_COLOR[ex.toLowerCase()]}
-              onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
-          ))}
-          {(activeBank || activeExchange || statusFilter !== "all") && (
-            <button onClick={() => { setActiveBank(null); setActiveExchange(null); setStatusFilter("all"); }}
-              className="text-xs px-2.5 py-1 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 whitespace-nowrap">
-              ✕ Сброс
-            </button>
-          )}
+
+        {/* ── Фильтры внутри хедера ── */}
+        <div className="px-3 pb-3 space-y-1.5">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+            {BANKS.map(b => (
+              <Chip key={b} label={b} active={activeBank === b}
+                color={BANK_COLOR[b]}
+                onClick={() => setActiveBank(activeBank === b ? null : b)} />
+            ))}
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+            {EXCHANGES.map(ex => (
+              <Chip key={ex} label={ex} active={activeExchange === ex}
+                brandKey={ex}
+                onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
+            ))}
+            {(activeBank || activeExchange || statusFilter !== "all") && (
+              <button onClick={() => { setActiveBank(null); setActiveExchange(null); setStatusFilter("all"); }}
+                className="text-xs px-2.5 py-1 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 whitespace-nowrap">
+                ✕ Сброс
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Статистика ── */}
-      <div className="flex items-baseline gap-2">
-        <h1 className="text-2xl font-black tracking-tight">Turbo mammoth</h1>
-        <span className="text-xs text-muted-foreground">P2P монитор</span>
-      </div>
+      <div className="px-3 space-y-4">
 
       <SectionTitle id="stats">Статистика</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
@@ -364,6 +403,7 @@ export default function Dashboard() {
       )}
 
       <div className="h-4" />
+      </div>{/* end px-3 space-y-4 */}
     </div>
   );
 }
@@ -374,8 +414,8 @@ function TradeCard({ trade, onConfirm, onRelease, confirmPending, releasePending
   confirmPending: boolean; releasePending: boolean;
 }) {
   const exKey = (trade.exchange ?? trade.accountName ?? "").toLowerCase();
-  const exColor = Object.entries(EXCHANGE_COLOR).find(([k]) => exKey.includes(k))?.[1] ?? "border-border text-muted-foreground";
   const exchangeLabel = EXCHANGES.find(e => exKey.includes(e.toLowerCase())) ?? null;
+  const exBrand = exchangeLabel ? EXCHANGE_BRAND[exchangeLabel.toLowerCase()] : null;
 
   return (
     <div className="bg-card border border-border rounded-lg p-3 text-sm">
@@ -386,7 +426,10 @@ function TradeCard({ trade, onConfirm, onRelease, confirmPending, releasePending
           </span>
           <span className="font-mono text-sm">{trade.amount?.toFixed(2)} {trade.asset}</span>
           {exchangeLabel && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium uppercase ${exColor}`}>{exchangeLabel}</span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded border font-bold uppercase"
+              style={exBrand ? { background: exBrand.bg, color: exBrand.color, borderColor: exBrand.border } : {}}
+            >{exchangeLabel}</span>
           )}
         </div>
         <span className={`text-[10px] px-2 py-0.5 rounded border ${STATUS_COLOR[trade.status] ?? ""}`}>
