@@ -52,7 +52,7 @@ const BANK_COLOR: Record<string, string> = {
 const BANK_BRAND: Record<string, { bg: string; color: string; border: string }> = {
   Vietcombank: { bg: "rgba(34,197,94,0.15)",  color: "#22c55e", border: "rgba(34,197,94,0.4)"  },
   Vietinbank:  { bg: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "rgba(59,130,246,0.4)" },
-  BIDV:        { bg: "rgba(96,165,250,0.12)", color: "#93c5fd", border: "rgba(96,165,250,0.35)"},
+  BIDV:        { bg: "rgba(234,179,8,0.15)",  color: "#eab308", border: "rgba(234,179,8,0.4)"  },
 };
 const BANK_LIMIT: Record<string, number> = {
   Vietcombank: 3_000_000_000,
@@ -62,7 +62,7 @@ const BANK_LIMIT: Record<string, number> = {
 const BANK_ACCENT: Record<string, string> = {
   Vietcombank: "#22c55e",
   Vietinbank:  "#3b82f6",
-  BIDV:        "#60a5fa",
+  BIDV:        "#eab308",
 };
 
 interface SyncStatus {
