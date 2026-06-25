@@ -49,6 +49,11 @@ const BANK_COLOR: Record<string, string> = {
   Vietinbank:  "bg-blue-500/10 text-blue-400 border-blue-500/20",
   BIDV:        "bg-blue-700/10 text-blue-300 border-blue-700/20",
 };
+const BANK_BRAND: Record<string, { bg: string; color: string; border: string }> = {
+  Vietcombank: { bg: "rgba(34,197,94,0.15)",  color: "#22c55e", border: "rgba(34,197,94,0.4)"  },
+  Vietinbank:  { bg: "rgba(59,130,246,0.15)", color: "#60a5fa", border: "rgba(59,130,246,0.4)" },
+  BIDV:        { bg: "rgba(96,165,250,0.12)", color: "#93c5fd", border: "rgba(96,165,250,0.35)"},
+};
 const BANK_LIMIT: Record<string, number> = {
   Vietcombank: 3_000_000_000,
   Vietinbank:  3_000_000_000,
@@ -100,7 +105,7 @@ function Chip({ label, active, color, brandKey, bankKey, onClick }: {
   label: string; active: boolean; color?: string;
   brandKey?: string; bankKey?: string; onClick: () => void
 }) {
-  const brand = brandKey ? EXCHANGE_BRAND[brandKey.toLowerCase()] : null;
+  const brand = brandKey ? EXCHANGE_BRAND[brandKey.toLowerCase()] : bankKey ? BANK_BRAND[bankKey] : null;
   const activeStyle = brand ? { background: brand.bg, color: brand.color, borderColor: brand.border } : {};
   const inactiveStyle = brand ? { borderColor: brand.border + "44", color: brand.color + "99" } : {};
   const iconSrc = brandKey ? EXCHANGE_ICON[brandKey.toLowerCase()] : bankKey ? BANK_ICON[bankKey] : null;
