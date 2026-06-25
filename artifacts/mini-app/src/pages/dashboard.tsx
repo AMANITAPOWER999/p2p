@@ -176,37 +176,38 @@ export default function Dashboard() {
         {/* Звёздная сетка */}
         <div className="absolute inset-0 opacity-20"
           style={{ backgroundImage: "radial-gradient(circle at 20% 80%, #1a3a6e 0%, transparent 50%), radial-gradient(circle at 80% 20%, #1a3a6e 0%, transparent 50%)" }} />
-        <div className="relative flex flex-col items-center pt-6 pb-2">
+        <div className="relative flex items-center gap-2 px-2 pt-2 pb-1">
           <img
             src={`${import.meta.env.BASE_URL}turbo-mammoth-logo.png`}
             alt="Turbo Mammoth"
-            className="w-48 h-48 object-contain drop-shadow-2xl"
-            style={{ filter: "drop-shadow(0 0 24px rgba(77,166,255,0.35))" }}
+            className="w-28 h-28 object-contain flex-shrink-0"
+            style={{ filter: "drop-shadow(0 0 16px rgba(77,166,255,0.4))" }}
           />
-          <div className="text-center mt-1">
-            <div className="flex items-baseline justify-center gap-2">
-              <span className="text-3xl font-black tracking-tight"
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-black tracking-tight"
                 style={{ background: "linear-gradient(90deg, #4da6ff, #f7a600)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 TURBO
               </span>
-              <span className="text-3xl font-black tracking-tight text-white">MAMMOTH</span>
+              <span className="text-2xl font-black tracking-tight text-white">MAMMOTH</span>
             </div>
-            <div className="text-[11px] font-semibold tracking-widest uppercase mt-0.5"
+            <div className="text-[10px] font-semibold tracking-widest uppercase"
               style={{ color: "#4da6ff" }}>
               ›› P2P Trading &amp; Bot ‹‹
+            </div>
+            {/* Фильтры банков рядом с текстом */}
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide mt-1.5">
+              {BANKS.map(b => (
+                <Chip key={b} label={b} active={activeBank === b}
+                  color={BANK_COLOR[b]}
+                  onClick={() => setActiveBank(activeBank === b ? null : b)} />
+              ))}
             </div>
           </div>
         </div>
 
-        {/* ── Фильтры внутри хедера ── */}
-        <div className="px-3 pb-3 space-y-1.5">
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
-            {BANKS.map(b => (
-              <Chip key={b} label={b} active={activeBank === b}
-                color={BANK_COLOR[b]}
-                onClick={() => setActiveBank(activeBank === b ? null : b)} />
-            ))}
-          </div>
+        {/* ── Фильтры бирж ── */}
+        <div className="px-3 pb-2">
           <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
             {EXCHANGES.map(ex => (
               <Chip key={ex} label={ex} active={activeExchange === ex}
