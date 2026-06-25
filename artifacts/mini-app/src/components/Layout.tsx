@@ -6,7 +6,7 @@ interface LayoutProps {
 }
 
 const NAV = [
-  { href: "/",        icon: LayoutDashboard, label: "Главная", anchor: null },
+  { href: "/",        icon: LayoutDashboard, label: "Turbo", anchor: null },
   { href: "/#trades", icon: ArrowRightLeft,  label: "Сделки",  anchor: "trades" },
   { href: "/#orders", icon: ListOrdered,     label: "Ордера",  anchor: "orders" },
   { href: "/#accounts",icon: WalletCards,    label: "Акк",     anchor: "accounts" },

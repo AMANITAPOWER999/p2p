@@ -180,6 +180,11 @@ export default function Dashboard() {
       </div>
 
       {/* ── Статистика ── */}
+      <div className="flex items-baseline gap-2">
+        <h1 className="text-2xl font-black tracking-tight">Turbo mammoth</h1>
+        <span className="text-xs text-muted-foreground">P2P монитор</span>
+      </div>
+
       <SectionTitle id="stats">Статистика</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-card border border-border rounded-lg p-3">
