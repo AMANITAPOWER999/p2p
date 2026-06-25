@@ -66,25 +66,48 @@ function SectionTitle({ id, children }: { id?: string; children: React.ReactNode
   );
 }
 
-function Chip({ label, active, color, brandKey, onClick }: { label: string; active: boolean; color?: string; brandKey?: string; onClick: () => void }) {
+const EXCHANGE_ICON: Record<string, string> = {
+  okx:     "https://www.google.com/s2/favicons?domain=okx.com&sz=32",
+  bybit:   "https://www.google.com/s2/favicons?domain=bybit.com&sz=32",
+  binance: "https://www.google.com/s2/favicons?domain=binance.com&sz=32",
+  gate:    "https://www.google.com/s2/favicons?domain=gate.io&sz=32",
+  kucoin:  "https://www.google.com/s2/favicons?domain=kucoin.com&sz=32",
+  mexc:    "https://www.google.com/s2/favicons?domain=mexc.com&sz=32",
+};
+
+const BANK_ICON: Record<string, string> = {
+  Vietcombank: `${import.meta.env.BASE_URL}logos/vietcombank.png`,
+  Vietinbank:  `${import.meta.env.BASE_URL}logos/vietinbank.png`,
+  BIDV:        `${import.meta.env.BASE_URL}logos/bidv.png`,
+};
+
+function Chip({ label, active, color, brandKey, bankKey, onClick }: {
+  label: string; active: boolean; color?: string;
+  brandKey?: string; bankKey?: string; onClick: () => void
+}) {
   const brand = brandKey ? EXCHANGE_BRAND[brandKey.toLowerCase()] : null;
   const activeStyle = brand ? { background: brand.bg, color: brand.color, borderColor: brand.border } : {};
-  const inactiveStyle = brand && active === false ? { borderColor: brand.border + "55", color: brand.color + "88" } : {};
+  const inactiveStyle = brand ? { borderColor: brand.border + "44", color: brand.color + "99" } : {};
+  const iconSrc = brandKey ? EXCHANGE_ICON[brandKey.toLowerCase()] : bankKey ? BANK_ICON[bankKey] : null;
 
   return (
     <button
       onClick={onClick}
-      style={active ? activeStyle : inactiveStyle}
-      className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-all whitespace-nowrap ${
+      style={active ? (brand ? activeStyle : {}) : (brand ? inactiveStyle : {})}
+      className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border font-medium transition-all whitespace-nowrap ${
         !brand
           ? active
             ? color ?? "bg-primary text-primary-foreground border-primary"
             : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
           : active
             ? ""
-            : "border-border text-muted-foreground hover:text-foreground"
+            : "border-border/60 hover:text-foreground"
       }`}
     >
+      {iconSrc && (
+        <img src={iconSrc} alt="" className="w-3.5 h-3.5 rounded-sm object-contain flex-shrink-0"
+          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+      )}
       {label}
     </button>
   );
@@ -171,56 +194,49 @@ export default function Dashboard() {
     <div className="max-w-2xl mx-auto">
 
       {/* ── Hero Header ── */}
-      <div className="relative overflow-hidden rounded-b-2xl mb-4"
-        style={{ background: "linear-gradient(135deg, #0a1628 0%, #0d1f3c 50%, #0a1628 100%)" }}>
-        {/* Звёздная сетка */}
-        <div className="absolute inset-0 opacity-20"
-          style={{ backgroundImage: "radial-gradient(circle at 20% 80%, #1a3a6e 0%, transparent 50%), radial-gradient(circle at 80% 20%, #1a3a6e 0%, transparent 50%)" }} />
-        <div className="relative flex items-center gap-2 px-2 pt-2 pb-1">
-          <img
-            src={`${import.meta.env.BASE_URL}turbo-mammoth-logo.png`}
-            alt="Turbo Mammoth"
-            className="w-28 h-28 object-contain flex-shrink-0"
-            style={{ filter: "drop-shadow(0 0 16px rgba(77,166,255,0.4))" }}
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black tracking-tight"
-                style={{ background: "linear-gradient(90deg, #4da6ff, #f7a600)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                TURBO
-              </span>
-              <span className="text-2xl font-black tracking-tight text-white">MAMMOTH</span>
-            </div>
-            <div className="text-[10px] font-semibold tracking-widest uppercase"
-              style={{ color: "#4da6ff" }}>
-              ›› P2P Trading &amp; Bot ‹‹
-            </div>
-            {/* Фильтры банков рядом с текстом */}
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide mt-1.5">
-              {BANKS.map(b => (
-                <Chip key={b} label={b} active={activeBank === b}
-                  color={BANK_COLOR[b]}
-                  onClick={() => setActiveBank(activeBank === b ? null : b)} />
-              ))}
-            </div>
+      <div className="flex items-center gap-3 px-3 pt-3 pb-2">
+        <img
+          src={`${import.meta.env.BASE_URL}turbo-mammoth-logo.png`}
+          alt="Turbo Mammoth"
+          className="w-28 h-28 object-contain flex-shrink-0"
+          style={{ filter: "drop-shadow(0 0 18px rgba(77,166,255,0.45))" }}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-black tracking-tight"
+              style={{ background: "linear-gradient(90deg, #4da6ff, #f7a600)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              TURBO
+            </span>
+            <span className="text-2xl font-black tracking-tight text-white">MAMMOTH</span>
+          </div>
+          <div className="text-[10px] font-semibold tracking-widest uppercase"
+            style={{ color: "#4da6ff" }}>
+            ›› P2P Trading &amp; Bot ‹‹
           </div>
         </div>
+      </div>
 
-        {/* ── Фильтры бирж ── */}
-        <div className="px-3 pb-2">
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
-            {EXCHANGES.map(ex => (
-              <Chip key={ex} label={ex} active={activeExchange === ex}
-                brandKey={ex}
-                onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
-            ))}
-            {(activeBank || activeExchange || statusFilter !== "all") && (
-              <button onClick={() => { setActiveBank(null); setActiveExchange(null); setStatusFilter("all"); }}
-                className="text-xs px-2.5 py-1 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 whitespace-nowrap">
-                ✕ Сброс
-              </button>
-            )}
-          </div>
+      {/* ── Фильтры ── */}
+      <div className="px-3 pb-3 space-y-2">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+          {BANKS.map(b => (
+            <Chip key={b} label={b} active={activeBank === b}
+              color={BANK_COLOR[b]} bankKey={b}
+              onClick={() => setActiveBank(activeBank === b ? null : b)} />
+          ))}
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
+          {EXCHANGES.map(ex => (
+            <Chip key={ex} label={ex} active={activeExchange === ex}
+              brandKey={ex}
+              onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
+          ))}
+          {(activeBank || activeExchange || statusFilter !== "all") && (
+            <button onClick={() => { setActiveBank(null); setActiveExchange(null); setStatusFilter("all"); }}
+              className="text-xs px-2.5 py-1 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 whitespace-nowrap">
+              ✕ Сброс
+            </button>
+          )}
         </div>
       </div>
 
