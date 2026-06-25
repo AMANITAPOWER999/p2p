@@ -256,7 +256,8 @@ export default function Dashboard() {
   });
 
   const activeTrades = filteredTrades.filter(t => t.status === "pending" || t.status === "paid");
-  const shownTrades = filteredTrades.slice(0, tradesLimit);
+  const isFiltered = !!(activeExchange || activeBank || statusFilter !== "all");
+  const shownTrades = isFiltered ? filteredTrades : filteredTrades.slice(0, tradesLimit);
 
   const totalVolume = filteredTrades.filter(t => t.status === "completed").reduce((s, t) => s + (t.fiatAmount ?? 0), 0);
 
@@ -751,7 +752,7 @@ export default function Dashboard() {
               releasePending={releaseMutation.isPending}
             />
           ))}
-          {filteredTrades.length > tradesLimit && (
+          {!isFiltered && filteredTrades.length > tradesLimit && (
             <button onClick={() => setTradesLimit(t => t + 20)}
               className="w-full py-2 text-xs text-muted-foreground border border-dashed border-border rounded-lg hover:border-primary/40 hover:text-foreground transition-colors">
               Показать ещё ({filteredTrades.length - tradesLimit} осталось)
