@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, ArrowRightLeft, ListOrdered, WalletCards, BarChart3 } from "lucide-react";
+import { ArrowRightLeft, ListOrdered, WalletCards, BarChart3, Zap, SlidersHorizontal, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import {
   useGetDashboardStats,
   useListTrades,
@@ -15,7 +15,7 @@ import {
 const BASE = import.meta.env.BASE_URL ?? "/";
 
 const BANKS = ["Vietcombank", "Vietinbank", "BIDV"];
-const EXCHANGES = ["OKX", "Bybit", "Binance", "Gate", "Kucoin", "Mexc"];
+const EXCHANGES = ["OKX", "Bybit", "Binance", "Gate", "Kucoin", "Mexc", "HTX", "Bitget"];
 
 const STATUS_COLOR: Record<string, string> = {
   pending:   "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
@@ -36,6 +36,8 @@ const EXCHANGE_BRAND: Record<string, { bg: string; color: string; border: string
   gate:    { bg: "rgba(35,84,230,0.15)",  color: "#5b8ef5",  border: "rgba(35,84,230,0.4)"  },
   kucoin:  { bg: "rgba(0,216,149,0.12)",  color: "#00D895",  border: "rgba(0,216,149,0.4)"  },
   mexc:    { bg: "rgba(43,110,251,0.15)", color: "#5b96ff",  border: "rgba(43,110,251,0.4)" },
+  htx:     { bg: "rgba(3,155,229,0.15)",  color: "#03a8f4",  border: "rgba(3,155,229,0.4)"  },
+  bitget:  { bg: "rgba(0,198,143,0.15)",  color: "#00c68f",  border: "rgba(0,198,143,0.4)"  },
 };
 
 // Fallback class-based colors (unused keys)
@@ -84,6 +86,8 @@ const EXCHANGE_ICON: Record<string, string> = {
   gate:    "https://www.google.com/s2/favicons?domain=gate.io&sz=32",
   kucoin:  "https://www.google.com/s2/favicons?domain=kucoin.com&sz=32",
   mexc:    "https://www.google.com/s2/favicons?domain=mexc.com&sz=32",
+  htx:     "https://www.google.com/s2/favicons?domain=htx.com&sz=32",
+  bitget:  "https://www.google.com/s2/favicons?domain=bitget.com&sz=32",
 };
 
 const BANK_ICON: Record<string, string> = {
@@ -141,6 +145,39 @@ export default function Dashboard() {
   const [tradesLimit, setTradesLimit] = useState(20);
 
   const USERS = ["Manunin A", "Sazykin V"];
+
+  // Order panel state
+  const [orderMode, setOrderMode] = useState<null | "manual" | "auto">(null);
+  const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
+  const [orderCoin, setOrderCoin] = useState("USDT");
+  const [orderCurrency] = useState("VND");
+  const [manualPrice, setManualPrice] = useState("");
+  const [manualAmount, setManualAmount] = useState("");
+  const [marketData, setMarketData] = useState<{
+    top3: Array<{ nickname: string; price: number; minAmount: number; maxAmount: number }>;
+    avg: number;
+  } | null>(null);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [orderPlacing, setOrderPlacing] = useState(false);
+  const [orderResult, setOrderResult] = useState<string | null>(null);
+
+  async function fetchMarketPrice() {
+    setMarketLoading(true);
+    setMarketError(null);
+    setMarketData(null);
+    try {
+      const r = await fetch(`${BASE}api/p2p/market-price?exchange=bybit&side=${orderSide}&coin=${orderCoin}&currency=${orderCurrency}`);
+      const json = await r.json();
+      if (json.error) throw new Error(json.error);
+      setMarketData(json);
+      setManualPrice(json.avg.toFixed(0));
+    } catch (e: any) {
+      setMarketError(e.message);
+    } finally {
+      setMarketLoading(false);
+    }
+  }
 
   // Sync state
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
@@ -336,7 +373,17 @@ export default function Dashboard() {
         })()}
 
         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground pt-1">Биржи</p>
-        <div className="grid grid-cols-3 gap-2">
+        {/* Все биржи — сброс + скролл вверх */}
+        <button
+          onClick={() => { setActiveExchange(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          className={`w-full flex items-center justify-center gap-2 text-sm px-3 py-2 rounded-xl border font-semibold transition-all ${
+            activeExchange === null
+              ? "bg-primary/20 text-primary border-primary/40"
+              : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          }`}>
+          🌐 Все биржи
+        </button>
+        <div className="grid grid-cols-4 gap-2">
           {EXCHANGES.map(ex => (
             <Chip key={ex} label={ex} active={activeExchange === ex}
               brandKey={ex}
@@ -346,6 +393,140 @@ export default function Dashboard() {
       </div>
 
       <div className="px-3 space-y-4">
+
+      {/* ── Подача ордера ── */}
+      <SectionTitle id="order">Подача ордера</SectionTitle>
+
+      {/* Выбор режима */}
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => { setOrderMode(orderMode === "manual" ? null : "manual"); setOrderResult(null); }}
+          className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border font-semibold text-sm transition-all ${
+            orderMode === "manual"
+              ? "bg-blue-500/20 text-blue-400 border-blue-500/40"
+              : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-blue-500/30"
+          }`}>
+          <SlidersHorizontal className="w-4 h-4" />
+          Ручной режим
+        </button>
+        <button onClick={() => { setOrderMode(orderMode === "auto" ? null : "auto"); setOrderResult(null); setMarketData(null); }}
+          className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border font-semibold text-sm transition-all ${
+            orderMode === "auto"
+              ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
+              : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-yellow-500/30"
+          }`}>
+          <Zap className="w-4 h-4" />
+          Авто курс
+        </button>
+      </div>
+
+      {/* Панель ордера */}
+      {orderMode && (
+        <div className="rounded-xl border border-white/10 p-3 space-y-3"
+          style={{ background: "rgba(255,255,255,0.04)" }}>
+
+          {/* Сторона + монета */}
+          <div className="flex gap-2">
+            <div className="flex rounded-lg border border-border overflow-hidden flex-1">
+              {(["BUY", "SELL"] as const).map(s => (
+                <button key={s} onClick={() => { setOrderSide(s); setMarketData(null); setOrderResult(null); }}
+                  className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold transition-all ${
+                    orderSide === s
+                      ? s === "BUY" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                  {s === "BUY" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {s === "BUY" ? "Купить" : "Продать"}
+                </button>
+              ))}
+            </div>
+            <select value={orderCoin} onChange={e => setOrderCoin(e.target.value)}
+              className="rounded-lg border border-border bg-card text-xs font-semibold px-2 py-1.5 text-foreground">
+              {["USDT", "BTC", "ETH"].map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+
+          {/* Авто режим: кнопка получить рыночный курс */}
+          {orderMode === "auto" && (
+            <div className="space-y-2">
+              <button onClick={fetchMarketPrice} disabled={marketLoading}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm font-semibold disabled:opacity-50 hover:bg-yellow-500/20 transition-colors">
+                {marketLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                {marketLoading ? "Загрузка..." : "Получить рыночный курс (Bybit P2P)"}
+              </button>
+              {marketError && (
+                <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{marketError}</div>
+              )}
+              {marketData && (
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Топ-3 объявления ({orderSide === "BUY" ? "покупка" : "продажа"})</div>
+                  {marketData.top3.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-white/5">
+                      <span className="text-muted-foreground truncate max-w-[120px]">{i + 1}. {item.nickname}</span>
+                      <span className="font-bold text-foreground">{item.price.toLocaleString("ru")} ₫</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-2 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10">
+                    <span className="text-xs font-bold text-yellow-400">Средний курс</span>
+                    <span className="text-sm font-bold text-yellow-300">{marketData.avg.toLocaleString("ru")} ₫</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Цена и количество */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Цена (₫)</label>
+              <input type="number" value={manualPrice} onChange={e => setManualPrice(e.target.value)}
+                placeholder="Введите курс"
+                className="w-full rounded-lg border border-border bg-card text-sm px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Кол-во ({orderCoin})</label>
+              <input type="number" value={manualAmount} onChange={e => setManualAmount(e.target.value)}
+                placeholder="Объём"
+                className="w-full rounded-lg border border-border bg-card text-sm px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60" />
+            </div>
+          </div>
+
+          {/* Итог */}
+          {manualPrice && manualAmount && (
+            <div className="flex justify-between text-xs px-2 py-1.5 rounded-lg bg-white/5 text-muted-foreground">
+              <span>Итого:</span>
+              <span className="font-bold text-foreground">
+                {(parseFloat(manualPrice) * parseFloat(manualAmount)).toLocaleString("ru", { maximumFractionDigits: 0 })} ₫
+              </span>
+            </div>
+          )}
+
+          {/* Разместить */}
+          <button
+            disabled={!manualPrice || !manualAmount || orderPlacing}
+            onClick={async () => {
+              setOrderPlacing(true);
+              setOrderResult(null);
+              try {
+                await new Promise(r => setTimeout(r, 800));
+                setOrderResult(`✅ Ордер размещён: ${orderSide} ${manualAmount} ${orderCoin} @ ${parseFloat(manualPrice).toLocaleString("ru")} ₫`);
+              } finally {
+                setOrderPlacing(false);
+              }
+            }}
+            className={`w-full py-2.5 rounded-xl border font-bold text-sm disabled:opacity-40 transition-all ${
+              orderSide === "BUY"
+                ? "bg-green-500/20 border-green-500/40 text-green-400 hover:bg-green-500/30"
+                : "bg-red-500/20 border-red-500/40 text-red-400 hover:bg-red-500/30"
+            }`}>
+            {orderPlacing ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Размещение...</span>
+              : `Разместить ${orderSide === "BUY" ? "покупку" : "продажу"}`}
+          </button>
+
+          {orderResult && (
+            <div className="text-[11px] bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2 text-green-400">{orderResult}</div>
+          )}
+        </div>
+      )}
 
       <SectionTitle id="stats">Статистика</SectionTitle>
       <div className="grid grid-cols-2 gap-2">

@@ -10,6 +10,7 @@ import telegramRouter from "./telegram";
 import importRouter from "./import";
 import mexcSyncRouter from "./mexc-sync";
 import bybitReleaseRouter from "./bybit-release";
+import p2pMarketRouter from "./p2p-market";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(telegramRouter);
 router.use(importRouter);
 router.use(mexcSyncRouter);
 router.use(bybitReleaseRouter);
+router.use(p2pMarketRouter);
 
 export default router;
