@@ -70,9 +70,9 @@ interface SyncStatus {
   bybit: { enabled: boolean; running: boolean; lastSyncAt: string | null; lastResult: { imported: number; totalFetched: number } | null };
   nextSyncAt: string | null;
 }
-interface AutoReleaseStatus {
-  enabled: boolean; running: boolean; lastCheckAt: string | null;
-  releasedCount: number; lastReleased: Array<{ orderId: string; at: string }>;
+interface ExchangeARState {
+  enabled: boolean; running: boolean; releasedCount: number;
+  lastCheckAt: string | null; supported: boolean; reason?: string;
 }
 
 function SectionTitle({ id, children }: { id?: string; children: React.ReactNode }) {
@@ -194,9 +194,9 @@ export default function Dashboard() {
 
   // Sync state
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-  const [autoRelease, setAutoRelease] = useState<AutoReleaseStatus | null>(null);
+  const [allAutoRelease, setAllAutoRelease] = useState<Record<string, ExchangeARState> | null>(null);
   const [syncing, setSyncing] = useState<"mexc" | "bybit" | null>(null);
-  const [arToggling, setArToggling] = useState(false);
+  const [arToggling, setArToggling] = useState<string | null>(null);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: getListTradesQueryKey() });
@@ -207,10 +207,10 @@ export default function Dashboard() {
     try {
       const [s, ar] = await Promise.all([
         fetch(`${BASE}api/mexc/sync-status`).then(r => r.json()),
-        fetch(`${BASE}api/bybit/auto-release/status`).then(r => r.json()),
+        fetch(`${BASE}api/auto-release/status`).then(r => r.json()),
       ]);
       setSyncStatus(s);
-      setAutoRelease(ar);
+      setAllAutoRelease(ar);
     } catch { /* ignore */ }
   }
 
@@ -230,13 +230,14 @@ export default function Dashboard() {
     } finally { setSyncing(null); }
   }
 
-  async function toggleAutoRelease() {
-    setArToggling(true);
-    const ep = autoRelease?.enabled ? "disable" : "enable";
+  async function toggleAutoRelease(exchange: string) {
+    setArToggling(exchange);
+    const st = allAutoRelease?.[exchange.toLowerCase()];
+    const ep = st?.enabled ? "disable" : "enable";
     try {
-      await fetch(`${BASE}api/bybit/auto-release/${ep}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      await fetch(`${BASE}api/auto-release/${exchange.toLowerCase()}/${ep}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       await fetchStatus();
-    } finally { setArToggling(false); }
+    } finally { setArToggling(null); }
   }
 
   // Apply filters
@@ -622,22 +623,44 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      {/* Авто-выпуск */}
-      <div className="rounded-lg border p-2.5 flex items-center justify-between transition-colors"
-        style={autoRelease?.enabled
-          ? { background: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.35)" }
-          : { background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
-        <div className="flex items-center gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full ${autoRelease?.running ? "bg-yellow-400 animate-pulse" : autoRelease?.enabled ? "bg-green-400" : "bg-muted-foreground"}`} />
-          <div>
-            <span className="text-xs font-medium">Авто-выпуск Bybit</span>
-            {autoRelease?.enabled && <span className="text-[10px] text-green-400 ml-1.5">выпущено: {autoRelease.releasedCount}</span>}
-          </div>
-        </div>
-        <button onClick={toggleAutoRelease} disabled={arToggling}
-          className={`text-[10px] px-2.5 py-1 rounded border font-medium disabled:opacity-50 transition-colors ${autoRelease?.enabled ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-green-500/10 text-green-400 border-green-500/30"}`}>
-          {arToggling ? "..." : autoRelease?.enabled ? "Выкл" : "Вкл"}
-        </button>
+      {/* Авто-выпуск — все биржи */}
+      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground pt-1">Авто-выпуск</p>
+      <div className="grid grid-cols-4 gap-2">
+        {EXCHANGES.map(ex => {
+          const st = allAutoRelease?.[ex.toLowerCase()];
+          const isToggling = arToggling === ex;
+          return (
+            <div key={ex} className="rounded-lg border p-2 flex flex-col gap-1.5 transition-colors"
+              style={st?.enabled
+                ? { background: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)" }
+                : { background: "rgba(255,255,255,0.08)", borderColor: "rgba(255,255,255,0.12)" }}>
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <img src={EXCHANGE_ICON[ex.toLowerCase()]} alt="" className="w-3.5 h-3.5 rounded-sm object-contain flex-shrink-0"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  <span className="text-[11px] font-semibold leading-none">{ex}</span>
+                </div>
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st?.running ? "bg-yellow-400 animate-pulse" : st?.enabled ? "bg-green-400" : "bg-muted-foreground/40"}`} />
+              </div>
+              {/* Count */}
+              {st?.enabled && (
+                <div className="text-[9px] text-green-400 font-medium">↑ {st.releasedCount}</div>
+              )}
+              {/* Action */}
+              {st?.supported ? (
+                <button onClick={() => toggleAutoRelease(ex)} disabled={isToggling}
+                  className={`w-full text-[10px] py-0.5 rounded border font-semibold disabled:opacity-50 transition-colors ${st?.enabled ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-green-500/10 text-green-400 border-green-500/30"}`}>
+                  {isToggling ? "..." : st?.enabled ? "Выкл" : "Вкл"}
+                </button>
+              ) : (
+                <div className="text-[9px] text-muted-foreground/60 text-center truncate" title={st?.reason ?? "нет API"}>
+                  {st?.reason ?? "нет API"}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* ── Активные сделки ── */}
