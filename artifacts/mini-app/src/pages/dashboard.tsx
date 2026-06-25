@@ -334,7 +334,7 @@ export default function Dashboard() {
       })()}
 
       {/* ── Фильтры ── */}
-      <div className="px-3 pb-3 space-y-2">
+      <div className="px-3 pb-6 space-y-3">
         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Банки</p>
         <div className="grid grid-cols-3 gap-2">
           {BANKS.map(b => (
@@ -387,7 +387,7 @@ export default function Dashboard() {
           );
         })()}
 
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground pt-1">Биржи</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground pt-3">Биржи</p>
         {/* Все биржи — сброс + скролл вверх */}
         <button
           onClick={() => { setActiveExchange(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
