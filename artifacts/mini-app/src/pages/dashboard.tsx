@@ -173,7 +173,7 @@ export default function Dashboard() {
   const [marketLoading, setMarketLoading] = useState(false);
   const [marketError, setMarketError] = useState<string | null>(null);
   const [orderPlacing, setOrderPlacing] = useState(false);
-  const [orderResult, setOrderResult] = useState<string | null>(null);
+  const [orderResult, setOrderResult] = useState<Array<{ exchange: string; ok: boolean; msg: string }> | null>(null);
 
   async function fetchMarketPrice() {
     setMarketLoading(true);
@@ -539,15 +539,45 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Целевые биржи */}
+          {enabledExchanges.size === 0 ? (
+            <div className="text-[11px] text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
+              ⚠️ Нет выбранных бирж — включите хотя бы одну галочкой выше
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Ордер будет подан на:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {[...enabledExchanges].map(ex => (
+                  <div key={ex} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                    style={{
+                      background: EXCHANGE_BRAND[ex.toLowerCase()]?.bg ?? "rgba(255,255,255,0.1)",
+                      color: EXCHANGE_BRAND[ex.toLowerCase()]?.color ?? "#fff",
+                      borderColor: EXCHANGE_BRAND[ex.toLowerCase()]?.border ?? "rgba(255,255,255,0.2)",
+                    }}>
+                    <img src={EXCHANGE_ICON[ex.toLowerCase()]} alt="" className="w-3 h-3 rounded-sm"
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    {ex}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Разместить */}
           <button
-            disabled={!manualPrice || !manualAmount || orderPlacing}
+            disabled={!manualPrice || !manualAmount || orderPlacing || enabledExchanges.size === 0}
             onClick={async () => {
               setOrderPlacing(true);
               setOrderResult(null);
+              const targets = [...enabledExchanges];
               try {
-                await new Promise(r => setTimeout(r, 800));
-                setOrderResult(`✅ Ордер размещён: ${orderSide} ${manualAmount} ${orderCoin} @ ${parseFloat(manualPrice).toLocaleString("ru")} ₫`);
+                await new Promise(r => setTimeout(r, 600));
+                setOrderResult(targets.map(ex => ({
+                  exchange: ex,
+                  ok: true,
+                  msg: `${orderSide} ${manualAmount} ${orderCoin} @ ${parseFloat(manualPrice).toLocaleString("ru")} ₫`,
+                })));
               } finally {
                 setOrderPlacing(false);
               }
@@ -557,12 +587,22 @@ export default function Dashboard() {
                 ? "bg-green-500/20 border-green-500/40 text-green-400 hover:bg-green-500/30"
                 : "bg-red-500/20 border-red-500/40 text-red-400 hover:bg-red-500/30"
             }`}>
-            {orderPlacing ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Размещение...</span>
-              : `Разместить ${orderSide === "BUY" ? "покупку" : "продажу"}`}
+            {orderPlacing
+              ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Размещение...</span>
+              : `Разместить ${orderSide === "BUY" ? "покупку" : "продажу"} на ${enabledExchanges.size} бирж${enabledExchanges.size === 1 ? "е" : enabledExchanges.size < 5 ? "ах" : "ах"}`}
           </button>
 
           {orderResult && (
-            <div className="text-[11px] bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2 text-green-400">{orderResult}</div>
+            <div className="space-y-1">
+              {orderResult.map(r => (
+                <div key={r.exchange} className={`flex items-center gap-2 text-[11px] px-3 py-1.5 rounded-lg border ${r.ok ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
+                  <img src={EXCHANGE_ICON[r.exchange.toLowerCase()]} alt="" className="w-3.5 h-3.5 rounded-sm flex-shrink-0"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  <span className="font-semibold">{r.exchange}:</span>
+                  <span>{r.ok ? "✅" : "❌"} {r.msg}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
