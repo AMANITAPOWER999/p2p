@@ -146,6 +146,14 @@ export default function Dashboard() {
   const [activeUser, setActiveUser] = useState<string | null>("Manunin A");
   const [activeBank, setActiveBank] = useState<string | null>(null);
   const [activeExchange, setActiveExchange] = useState<string | null>(null);
+  const [enabledExchanges, setEnabledExchanges] = useState<Set<string>>(new Set(["OKX", "Bybit"]));
+  function toggleExchangeEnabled(ex: string) {
+    setEnabledExchanges(prev => {
+      const next = new Set(prev);
+      next.has(ex) ? next.delete(ex) : next.add(ex);
+      return next;
+    });
+  }
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tradesLimit, setTradesLimit] = useState(20);
 
@@ -390,11 +398,26 @@ export default function Dashboard() {
           🌐 Все биржи
         </button>
         <div className="grid grid-cols-4 gap-2">
-          {EXCHANGES.map(ex => (
-            <Chip key={ex} label={ex} active={activeExchange === ex}
-              brandKey={ex}
-              onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
-          ))}
+          {EXCHANGES.map(ex => {
+            const isOn = enabledExchanges.has(ex);
+            return (
+              <div key={ex} className="relative">
+                <Chip label={ex} active={activeExchange === ex}
+                  brandKey={ex}
+                  onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
+                {/* Галочка вкл/выкл */}
+                <button
+                  onClick={e => { e.stopPropagation(); toggleExchangeEnabled(ex); }}
+                  title={isOn ? "Выключить" : "Включить"}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold transition-all z-10 border"
+                  style={isOn
+                    ? { background: "#22c55e", borderColor: "#16a34a", color: "#fff", boxShadow: "0 0 5px #22c55e88" }
+                    : { background: "rgba(255,255,255,0.15)", borderColor: "rgba(255,255,255,0.25)", color: "rgba(255,255,255,0.5)" }}>
+                  {isOn ? "✓" : "×"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
