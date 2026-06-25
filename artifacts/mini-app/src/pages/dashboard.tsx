@@ -47,6 +47,16 @@ const BANK_COLOR: Record<string, string> = {
   Vietinbank:  "bg-blue-500/10 text-blue-400 border-blue-500/20",
   BIDV:        "bg-blue-700/10 text-blue-300 border-blue-700/20",
 };
+const BANK_LIMIT: Record<string, number> = {
+  Vietcombank: 3_000_000_000,
+  Vietinbank:  3_000_000_000,
+  BIDV:        500_000_000,
+};
+const BANK_ACCENT: Record<string, string> = {
+  Vietcombank: "#22c55e",
+  Vietinbank:  "#3b82f6",
+  BIDV:        "#60a5fa",
+};
 
 interface SyncStatus {
   mexc: { enabled: boolean; running: boolean; lastSyncAt: string | null; lastResult: { imported: number; totalFetched: number } | null };
@@ -257,6 +267,50 @@ export default function Dashboard() {
               onClick={() => setActiveBank(activeBank === b ? null : b)} />
           ))}
         </div>
+
+        {/* ── Лимит банка ── */}
+        {activeBank && (() => {
+          const limit = BANK_LIMIT[activeBank] ?? 0;
+          const accent = BANK_ACCENT[activeBank] ?? "#4da6ff";
+          const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+          const used = (allTrades ?? []).filter(t =>
+            t.status === "completed" &&
+            new Date(t.createdAt) >= todayStart &&
+            ((t.paymentMethod ?? "").toLowerCase().includes(activeBank.toLowerCase()) ||
+             (t.counterpartyName ?? "").toLowerCase().includes(activeBank.toLowerCase()))
+          ).reduce((s, t) => s + (t.fiatAmount ?? 0), 0);
+          const pct = Math.min((used / limit) * 100, 100);
+          const remaining = Math.max(limit - used, 0);
+          const fmt = (n: number) => n.toLocaleString("ru", { maximumFractionDigits: 0 });
+          const warn = pct >= 80;
+          return (
+            <div className="rounded-xl border p-3 space-y-2"
+              style={{ borderColor: accent + "40", background: accent + "0d" }}>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold" style={{ color: accent }}>{activeBank}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Суточный лимит</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Использовано</span>
+                <span className="font-bold" style={{ color: warn ? "#f97316" : accent }}>
+                  {fmt(used)} ₫
+                </span>
+              </div>
+              {/* Прогресс-бар */}
+              <div className="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${pct}%`, background: warn ? "#f97316" : accent }} />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>Осталось: <span className="font-semibold text-foreground">{fmt(remaining)} ₫</span></span>
+                <span className="font-semibold" style={{ color: warn ? "#f97316" : undefined }}>
+                  {pct.toFixed(1)}% из {fmt(limit)} ₫
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground pt-1">Биржи</p>
         <div className="grid grid-cols-3 gap-2">
           {EXCHANGES.map(ex => (
