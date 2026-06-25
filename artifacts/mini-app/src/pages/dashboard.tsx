@@ -95,7 +95,7 @@ function Chip({ label, active, color, brandKey, bankKey, onClick }: {
     <button
       onClick={onClick}
       style={active ? (brand ? activeStyle : {}) : (brand ? inactiveStyle : {})}
-      className={`flex items-center gap-2 text-sm px-4 py-2 rounded-full border font-semibold transition-all whitespace-nowrap ${
+      className={`w-full flex items-center justify-center gap-2 text-sm px-3 py-2 rounded-xl border font-semibold transition-all ${
         !brand
           ? active
             ? color ?? "bg-primary text-primary-foreground border-primary"
@@ -192,7 +192,7 @@ export default function Dashboard() {
   const totalVolume = filteredTrades.filter(t => t.status === "completed").reduce((s, t) => s + (t.fiatAmount ?? 0), 0);
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="w-full">
 
       {/* ── Hero Header ── */}
       <div className="flex items-center gap-3 px-3 pt-3 pb-2">
@@ -248,27 +248,29 @@ export default function Dashboard() {
       })()}
 
       {/* ── Фильтры ── */}
-      <div className="px-3 pb-3 space-y-2.5">
-        <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+      <div className="px-3 pb-3 space-y-2">
+        {/* Банки: 3 равных колонки */}
+        <div className="grid grid-cols-3 gap-2">
           {BANKS.map(b => (
             <Chip key={b} label={b} active={activeBank === b}
               color={BANK_COLOR[b]} bankKey={b}
               onClick={() => setActiveBank(activeBank === b ? null : b)} />
           ))}
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+        {/* Биржи: 3 колонки, 2 ряда */}
+        <div className="grid grid-cols-3 gap-2">
           {EXCHANGES.map(ex => (
             <Chip key={ex} label={ex} active={activeExchange === ex}
               brandKey={ex}
               onClick={() => setActiveExchange(activeExchange === ex ? null : ex)} />
           ))}
-          {(activeBank || activeExchange || statusFilter !== "all") && (
-            <button onClick={() => { setActiveBank(null); setActiveExchange(null); setStatusFilter("all"); }}
-              className="text-sm px-4 py-2 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 whitespace-nowrap font-medium">
-              ✕ Сброс
-            </button>
-          )}
         </div>
+        {(activeBank || activeExchange || statusFilter !== "all") && (
+          <button onClick={() => { setActiveBank(null); setActiveExchange(null); setStatusFilter("all"); }}
+            className="w-full text-sm px-4 py-2 rounded-full border border-red-500/30 text-red-400 hover:bg-red-500/10 font-medium">
+            ✕ Сброс
+          </button>
+        )}
       </div>
 
       <div className="px-3 space-y-4">
