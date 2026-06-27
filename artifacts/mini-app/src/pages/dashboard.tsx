@@ -157,6 +157,10 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tradesLimit, setTradesLimit] = useState(20);
   const [merchantExchange, setMerchantExchange] = useState<string>("Bybit");
+  const [merchantSide, setMerchantSide] = useState<"all" | "buy" | "sell">("all");
+  const [merchantAmountFilter, setMerchantAmountFilter] = useState(false);
+  const AMOUNT_MIN = 130_000;
+  const AMOUNT_MAX = 9_999_999;
 
   // Bybit P2P сделки из БД — загружаем для секции мерчантов
   const [bybitTrades, setBybitTrades] = useState<Array<{
@@ -929,6 +933,36 @@ export default function Dashboard() {
         })}
       </div>
 
+      {/* Кнопки покупка/продажа + фильтр по сумме */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
+          {(["all", "buy", "sell"] as const).map(s => {
+            const label = s === "all" ? "Все" : s === "buy" ? "▲ Покупка" : "▼ Продажа";
+            const activeStyle = s === "buy"
+              ? { background: "rgba(34,197,94,0.18)", color: "#22c55e", borderColor: "rgba(34,197,94,0.3)" }
+              : s === "sell"
+              ? { background: "rgba(239,68,68,0.18)", color: "#ef4444", borderColor: "rgba(239,68,68,0.3)" }
+              : { background: "rgba(255,255,255,0.14)", color: "#fff" };
+            const inactiveStyle = { background: "transparent", color: "rgba(255,255,255,0.35)" };
+            return (
+              <button key={s} onClick={() => setMerchantSide(s)}
+                className="text-[11px] font-semibold px-3 py-1.5 transition-all"
+                style={merchantSide === s ? activeStyle : inactiveStyle}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          onClick={() => setMerchantAmountFilter(v => !v)}
+          className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all flex-shrink-0"
+          style={merchantAmountFilter
+            ? { background: "rgba(77,166,255,0.18)", color: "#4da6ff", borderColor: "rgba(77,166,255,0.35)" }
+            : { background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.4)", borderColor: "rgba(255,255,255,0.12)" }}>
+          130к–9.9М ₫
+        </button>
+      </div>
+
       {/* Ордера / объявления выбранной биржи */}
       {(() => {
         const brand = EXCHANGE_BRAND[merchantExchange.toLowerCase()];
@@ -953,8 +987,14 @@ export default function Dashboard() {
             </div>
           );
 
-          const buyTrades  = bybitTrades.filter(t => t.side === "buy");
-          const sellTrades = bybitTrades.filter(t => t.side === "sell");
+          let filteredTrades = bybitTrades;
+          if (merchantSide !== "all") filteredTrades = filteredTrades.filter(t => t.side === merchantSide);
+          if (merchantAmountFilter) filteredTrades = filteredTrades.filter(t =>
+            t.fiatAmount != null && t.fiatAmount >= AMOUNT_MIN && t.fiatAmount <= AMOUNT_MAX
+          );
+
+          const buyTrades  = filteredTrades.filter(t => t.side === "buy");
+          const sellTrades = filteredTrades.filter(t => t.side === "sell");
 
           function BybitTradeList({ list, side }: { list: typeof bybitTrades; side: "buy" | "sell" }) {
             if (!list || list.length === 0) return null;
@@ -1000,10 +1040,16 @@ export default function Dashboard() {
             );
           }
 
+          if (filteredTrades.length === 0) return (
+            <div className="text-center py-6 rounded-xl border border-dashed border-white/10 text-muted-foreground text-sm">
+              Нет сделок по выбранным фильтрам
+            </div>
+          );
+
           return (
             <div className="space-y-3">
               <div className="text-[10px] text-muted-foreground text-right">
-                Последние {bybitTrades.length} сделок
+                {filteredTrades.length} из {bybitTrades.length} сделок
               </div>
               <BybitTradeList list={buyTrades} side="buy" />
               <BybitTradeList list={sellTrades} side="sell" />
@@ -1012,9 +1058,14 @@ export default function Dashboard() {
         }
 
         // ── Другие биржи: из таблицы orders ──
-        const exOrders = (orders ?? []).filter(o =>
+        let exOrders = (orders ?? []).filter(o =>
           (o.exchange ?? "").toLowerCase() === merchantExchange.toLowerCase()
         );
+        if (merchantSide !== "all") exOrders = exOrders.filter(o => o.side === merchantSide);
+        if (merchantAmountFilter) exOrders = exOrders.filter(o => {
+          const amt = o.fiatAmount ?? o.maxAmount;
+          return amt != null && Number(amt) >= AMOUNT_MIN && Number(amt) <= AMOUNT_MAX;
+        });
 
         if (!orders) return <div className="text-center py-4 text-muted-foreground text-sm">Загрузка...</div>;
         if (exOrders.length === 0) return (
