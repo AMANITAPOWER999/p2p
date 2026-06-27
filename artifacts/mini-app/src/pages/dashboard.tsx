@@ -156,6 +156,7 @@ export default function Dashboard() {
   }
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tradesLimit, setTradesLimit] = useState(20);
+  const [merchantExchange, setMerchantExchange] = useState<string>("Bybit");
 
   // Балансы банков — хранятся в localStorage
   const [bankBalances, setBankBalances] = useState<Record<string, number>>(() => {
@@ -324,10 +325,11 @@ export default function Dashboard() {
       {/* ── Навигация под логотипом ── */}
       {(() => {
         const NAV_SCROLL = [
-          { icon: ArrowRightLeft, label: "Сделки",  anchor: "trades" },
-          { icon: ListOrdered,    label: "Ордера",  anchor: "orders" },
-          { icon: WalletCards,    label: "Акк",     anchor: "accounts" },
-          { icon: BarChart3,      label: "Синк",    anchor: "sync" },
+          { icon: ArrowRightLeft, label: "Сделки",   anchor: "trades" },
+          { icon: ListOrdered,    label: "Ордера",   anchor: "orders" },
+          { icon: WalletCards,    label: "Акк",      anchor: "accounts" },
+          { icon: BarChart3,      label: "Синк",     anchor: "sync" },
+          { icon: TrendingUp,     label: "Мерчанты", anchor: "merchants" },
         ];
         function scrollTo(anchor: string) {
           document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -880,6 +882,98 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* ── Все P2P мерчанты ── */}
+      <SectionTitle id="merchants">Все P2P мерчанты</SectionTitle>
+
+      {/* Переключатель биржи */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+        {EXCHANGES.map(ex => {
+          const brand = EXCHANGE_BRAND[ex.toLowerCase()];
+          const isActive = merchantExchange === ex;
+          return (
+            <button key={ex} onClick={() => setMerchantExchange(ex)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border whitespace-nowrap font-semibold transition-all flex-shrink-0"
+              style={isActive
+                ? { background: brand?.bg, color: brand?.color, borderColor: brand?.border }
+                : { background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.45)", borderColor: "rgba(255,255,255,0.12)" }}>
+              <img src={EXCHANGE_ICON[ex.toLowerCase()]} alt="" className="w-3.5 h-3.5 rounded-sm"
+                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              {ex}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Ордера выбранной биржи */}
+      {(() => {
+        const exOrders = (orders ?? []).filter(o =>
+          (o.exchange ?? "").toLowerCase() === merchantExchange.toLowerCase()
+        );
+        const brand = EXCHANGE_BRAND[merchantExchange.toLowerCase()];
+        const accent = brand?.color ?? "#4da6ff";
+
+        if (!orders) return <div className="text-center py-4 text-muted-foreground text-sm">Загрузка...</div>;
+        if (exOrders.length === 0) return (
+          <div className="text-center py-6 rounded-xl border border-dashed border-white/10 text-muted-foreground text-sm">
+            Нет ордеров на {merchantExchange}
+          </div>
+        );
+
+        const buyOrders  = exOrders.filter(o => o.side === "buy");
+        const sellOrders = exOrders.filter(o => o.side === "sell");
+
+        function OrderList({ list, side }: { list: typeof exOrders; side: "buy" | "sell" }) {
+          if (list.length === 0) return null;
+          const sideColor = side === "buy" ? "#22c55e" : "#ef4444";
+          const sideLabel = side === "buy" ? "Покупка" : "Продажа";
+          return (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5"
+                style={{ color: sideColor }}>
+                <span>{side === "buy" ? "▲" : "▼"}</span>{sideLabel} — {list.length}
+              </div>
+              {list.map(o => (
+                <div key={o.id} className="rounded-lg border p-2.5 space-y-1"
+                  style={{ background: "rgba(255,255,255,0.06)", borderColor: "rgba(255,255,255,0.10)" }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">{o.asset} / {o.fiatCurrency}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${o.isActive ? "text-green-400 bg-green-500/10 border-green-500/20" : "text-muted-foreground border-white/10"}`}>
+                      {o.isActive ? "Активен" : "Выкл"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-muted-foreground">
+                    <span>Цена: <span className="font-bold text-foreground">{Number(o.price).toLocaleString("ru", { maximumFractionDigits: 0 })} ₫</span></span>
+                    {o.availableAmount != null && (
+                      <span>Доступно: <span className="font-semibold text-foreground">{Number(o.availableAmount).toLocaleString("ru", { maximumFractionDigits: 4 })}</span></span>
+                    )}
+                  </div>
+                  {(o.minAmount != null || o.maxAmount != null) && (
+                    <div className="text-[10px] text-muted-foreground">
+                      Лимит: {o.minAmount != null ? Number(o.minAmount).toLocaleString("ru", { maximumFractionDigits: 0 }) : "—"} –{" "}
+                      {o.maxAmount != null ? Number(o.maxAmount).toLocaleString("ru", { maximumFractionDigits: 0 }) : "—"} ₫
+                    </div>
+                  )}
+                  {o.paymentMethod && (
+                    <div className="text-[10px] text-muted-foreground truncate">💳 {o.paymentMethod}</div>
+                  )}
+                  {o.accountName && (
+                    <div className="text-[10px]" style={{ color: accent + "cc" }}>👤 {o.accountName}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-3">
+            <div className="text-[10px] text-muted-foreground text-right">Всего: {exOrders.length} ордеров</div>
+            <OrderList list={buyOrders} side="buy" />
+            <OrderList list={sellOrders} side="sell" />
+          </div>
+        );
+      })()}
 
       <div className="h-4" />
       </div>{/* end px-3 space-y-4 */}
