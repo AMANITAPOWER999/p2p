@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { autoReleaseState, startAutoRelease, stopAutoRelease, runAutoRelease, releaseSingleOrder } from "../lib/scheduler";
+import { db, tradesTable, accountsTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
 
 const router = Router();
 
@@ -60,6 +62,54 @@ router.post("/bybit/release/:orderId", async (req, res) => {
   } catch (err) {
     req.log.error(err, "manual release failed");
     res.status(500).json({ error: "Ошибка выпуска ордера" });
+  }
+});
+
+// ── Bybit P2P сделки из БД (для секции мерчантов) ───────────────────────────
+
+router.get("/bybit/ads", async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query["limit"] ?? 50), 200);
+
+    // Find all Bybit accounts
+    const bybitAccounts = await db
+      .select({ id: accountsTable.id, name: accountsTable.name })
+      .from(accountsTable)
+      .where(eq(accountsTable.exchange, "bybit"));
+
+    if (bybitAccounts.length === 0) {
+      res.json({ ads: [], count: 0, total: 0, note: "Нет аккаунтов Bybit в БД" });
+      return;
+    }
+
+    const accountIds = bybitAccounts.map(a => a.id);
+
+    // Fetch latest trades for Bybit accounts
+    const rows = await db
+      .select({
+        id: tradesTable.id,
+        side: tradesTable.side,
+        asset: tradesTable.asset,
+        fiatCurrency: tradesTable.fiatCurrency,
+        amount: tradesTable.amount,
+        price: tradesTable.price,
+        fiatAmount: tradesTable.fiatAmount,
+        status: tradesTable.status,
+        counterpartyName: tradesTable.counterpartyName,
+        paymentMethod: tradesTable.paymentMethod,
+        exchangeTradeId: tradesTable.exchangeTradeId,
+        createdAt: tradesTable.createdAt,
+        accountId: tradesTable.accountId,
+      })
+      .from(tradesTable)
+      .where(eq(tradesTable.accountId, accountIds[0]))
+      .orderBy(desc(tradesTable.createdAt))
+      .limit(limit);
+
+    res.json({ ads: rows, count: rows.length, total: rows.length });
+  } catch (err) {
+    req.log.error(err, "bybit/ads failed");
+    res.status(500).json({ error: "Ошибка получения сделок Bybit" });
   }
 });
 

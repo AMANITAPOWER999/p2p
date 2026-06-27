@@ -215,6 +215,59 @@ export function mapBybitSide(side: number): "buy" | "sell" {
   return side === 0 ? "buy" : "sell";
 }
 
+// ─── P2P Ads (merchant listings) ─────────────────────────────────────────────
+
+export interface BybitP2PAd {
+  itemId: string;
+  side: number;        // 0=Buy, 1=Sell
+  tokenId: string;
+  currencyId: string;
+  price: string;
+  minAmount: string;
+  maxAmount: string;
+  quantity: string;    // available amount
+  paymentMethods?: Array<{ paymentType: string; realName?: string }>;
+  status?: number;     // 1=online, 2=offline
+  nickName?: string;
+}
+
+// getBybitP2PAds returns active P2P trade orders (pending/paid status).
+// Note: /v5/p2p/item/personal/list (merchant listings) requires special P2P API permissions
+// that are not available with standard trade API keys.
+export async function getBybitP2PAds(
+  apiKey: string,
+  secret: string,
+): Promise<{ ads: BybitP2PAd[]; total: number; rawResponses: Record<string, unknown>[] }> {
+  const rawResponses: Record<string, unknown>[] = [];
+  const allAds: BybitP2PAd[] = [];
+  let total = 0;
+
+  // Fetch active orders (pending + paid) from p2p order list
+  // status 10=pending, 20=paid (buyer paid, waiting release)
+  const result = await getBybitP2POrders(apiKey, secret, { page: 1, size: 50 });
+  rawResponses.push({ source: "order/simplifyList", total: result.total });
+  total = result.total;
+
+  for (const order of result.orders) {
+    const statusCode = order.status ?? order.orderStatus ?? 0;
+    // Map to ad-like shape for UI display
+    allAds.push({
+      itemId: String(order.id ?? order.orderId ?? ""),
+      side: order.side,
+      tokenId: (order.notifyTokenId ?? order.tokenId ?? "USDT"),
+      currencyId: order.currencyId ?? "VND",
+      price: order.price,
+      minAmount: "0",
+      maxAmount: order.amount,
+      quantity: order.notifyTokenQuantity ?? order.quantity ?? "0",
+      status: statusCode,
+      nickName: order.targetNickName ?? order.nickName ?? undefined,
+    });
+  }
+
+  return { ads: allAds, total, rawResponses };
+}
+
 export async function getBybitAccountInfo(apiKey: string, secret: string): Promise<{ uid?: string; email?: string } | null> {
   try {
     const data = await bybitGet(apiKey, secret, "/v5/user/query-api") as Record<string, unknown>;

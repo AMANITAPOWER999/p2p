@@ -158,6 +158,30 @@ export default function Dashboard() {
   const [tradesLimit, setTradesLimit] = useState(20);
   const [merchantExchange, setMerchantExchange] = useState<string>("Bybit");
 
+  // Bybit P2P сделки из БД — загружаем для секции мерчантов
+  const [bybitTrades, setBybitTrades] = useState<Array<{
+    id: number; side: string; asset: string; fiatCurrency: string;
+    amount: number | null; price: number | null; fiatAmount: number | null;
+    status: string; counterpartyName: string | null; paymentMethod: string | null;
+    exchangeTradeId: string | null; createdAt: string;
+  }> | null>(null);
+  const [bybitAdsLoading, setBybitAdsLoading] = useState(false);
+  const [bybitAdsError, setBybitAdsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (merchantExchange !== "Bybit") return;
+    setBybitAdsLoading(true);
+    setBybitAdsError(null);
+    fetch(`${BASE}api/bybit/ads?limit=50`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setBybitAdsError(d.error); setBybitTrades([]); }
+        else setBybitTrades(d.ads ?? []);
+      })
+      .catch(() => setBybitAdsError("Ошибка загрузки сделок Bybit"))
+      .finally(() => setBybitAdsLoading(false));
+  }, [merchantExchange]);
+
   // Балансы банков — хранятся в localStorage
   const [bankBalances, setBankBalances] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem("bankBalances") ?? "{}"); } catch { return {}; }
@@ -905,13 +929,92 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Ордера выбранной биржи */}
+      {/* Ордера / объявления выбранной биржи */}
       {(() => {
+        const brand = EXCHANGE_BRAND[merchantExchange.toLowerCase()];
+        const accent = brand?.color ?? "#4da6ff";
+
+        // ── Bybit: грузим объявления напрямую с API ──
+        if (merchantExchange === "Bybit") {
+          if (bybitAdsLoading) return (
+            <div className="text-center py-4 text-muted-foreground text-sm flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Загрузка сделок…
+            </div>
+          );
+          if (bybitAdsError) return (
+            <div className="rounded-xl border border-dashed border-red-500/30 p-4 text-center text-sm">
+              <div className="text-red-400 font-semibold mb-1">⚠️ Ошибка</div>
+              <div className="text-muted-foreground text-xs">{bybitAdsError}</div>
+            </div>
+          );
+          if (!bybitTrades || bybitTrades.length === 0) return (
+            <div className="text-center py-6 rounded-xl border border-dashed border-white/10 text-muted-foreground text-sm">
+              Нет сделок Bybit в базе — запустите синхронизацию
+            </div>
+          );
+
+          const buyTrades  = bybitTrades.filter(t => t.side === "buy");
+          const sellTrades = bybitTrades.filter(t => t.side === "sell");
+
+          function BybitTradeList({ list, side }: { list: typeof bybitTrades; side: "buy" | "sell" }) {
+            if (!list || list.length === 0) return null;
+            const sideColor = side === "buy" ? "#22c55e" : "#ef4444";
+            const sideLabel = side === "buy" ? "Покупка" : "Продажа";
+            return (
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5"
+                  style={{ color: sideColor }}>
+                  <span>{side === "buy" ? "▲" : "▼"}</span>{sideLabel} — {list.length}
+                </div>
+                {list.map(t => {
+                  const stClass = STATUS_COLOR[t.status] ?? "text-muted-foreground border-white/10";
+                  const stLabel = STATUS_LABEL[t.status] ?? t.status;
+                  return (
+                    <div key={t.id} className="rounded-lg border p-2.5 space-y-1"
+                      style={{ background: "rgba(255,255,255,0.06)", borderColor: "rgba(255,255,255,0.10)" }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground">{t.asset} / {t.fiatCurrency}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${stClass}`}>
+                          {stLabel}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-muted-foreground">
+                        <span>Цена: <span className="font-bold text-foreground">{Number(t.price ?? 0).toLocaleString("ru", { maximumFractionDigits: 0 })}</span></span>
+                        {t.amount != null && <span>Кол-во: <span className="font-semibold text-foreground">{Number(t.amount).toLocaleString("ru", { maximumFractionDigits: 4 })} {t.asset}</span></span>}
+                      </div>
+                      {t.fiatAmount != null && t.fiatAmount > 0 && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Сумма: <span className="font-semibold text-foreground">{Number(t.fiatAmount).toLocaleString("ru", { maximumFractionDigits: 0 })}</span> {t.fiatCurrency}
+                        </div>
+                      )}
+                      {t.counterpartyName && (
+                        <div className="text-[10px]" style={{ color: accent + "cc" }}>👤 {t.counterpartyName}</div>
+                      )}
+                      <div className="text-[10px] text-muted-foreground opacity-50">
+                        {new Date(t.createdAt).toLocaleDateString("ru", { day: "2-digit", month: "2-digit" })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-3">
+              <div className="text-[10px] text-muted-foreground text-right">
+                Последние {bybitTrades.length} сделок
+              </div>
+              <BybitTradeList list={buyTrades} side="buy" />
+              <BybitTradeList list={sellTrades} side="sell" />
+            </div>
+          );
+        }
+
+        // ── Другие биржи: из таблицы orders ──
         const exOrders = (orders ?? []).filter(o =>
           (o.exchange ?? "").toLowerCase() === merchantExchange.toLowerCase()
         );
-        const brand = EXCHANGE_BRAND[merchantExchange.toLowerCase()];
-        const accent = brand?.color ?? "#4da6ff";
 
         if (!orders) return <div className="text-center py-4 text-muted-foreground text-sm">Загрузка...</div>;
         if (exOrders.length === 0) return (
