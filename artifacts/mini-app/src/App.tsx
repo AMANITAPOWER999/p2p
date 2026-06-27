@@ -10,6 +10,7 @@ import Trades from "@/pages/trades";
 import Orders from "@/pages/orders";
 import Accounts from "@/pages/accounts";
 import Stats from "@/pages/stats";
+import PasswordGate from "@/components/PasswordGate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,14 +42,16 @@ function App() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <PasswordGate>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </PasswordGate>
   );
 }
 
