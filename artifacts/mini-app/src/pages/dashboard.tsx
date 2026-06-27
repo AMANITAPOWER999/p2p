@@ -157,6 +157,19 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tradesLimit, setTradesLimit] = useState(20);
 
+  // Балансы банков — хранятся в localStorage
+  const [bankBalances, setBankBalances] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem("bankBalances") ?? "{}"); } catch { return {}; }
+  });
+  const [editingBalance, setEditingBalance] = useState<string | null>(null);
+  const [balanceInput, setBalanceInput] = useState("");
+  function saveBankBalance(bank: string, value: number) {
+    const next = { ...bankBalances, [bank]: value };
+    setBankBalances(next);
+    localStorage.setItem("bankBalances", JSON.stringify(next));
+    setEditingBalance(null);
+  }
+
   const USERS = ["Manunin A", "Sazykin V"];
 
   // Order panel state
@@ -388,6 +401,45 @@ export default function Dashboard() {
                 <span className="text-sm font-bold" style={{ color: accent }}>{activeBank}</span>
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Суточный лимит</span>
               </div>
+
+              {/* Баланс */}
+              <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-white/5 border border-white/10">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Баланс</span>
+                {editingBalance === activeBank ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      type="number"
+                      value={balanceInput}
+                      onChange={e => setBalanceInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") saveBankBalance(activeBank, parseFloat(balanceInput) || 0);
+                        if (e.key === "Escape") setEditingBalance(null);
+                      }}
+                      placeholder="0"
+                      className="w-28 text-right text-xs font-bold rounded px-1.5 py-0.5 bg-white/10 border border-white/20 text-foreground focus:outline-none"
+                    />
+                    <button onClick={() => saveBankBalance(activeBank, parseFloat(balanceInput) || 0)}
+                      className="text-[10px] px-2 py-0.5 rounded font-semibold bg-green-500/20 text-green-400 border border-green-500/30">
+                      ✓
+                    </button>
+                    <button onClick={() => setEditingBalance(null)}
+                      className="text-[10px] px-2 py-0.5 rounded font-semibold bg-white/10 text-muted-foreground border border-white/20">
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setEditingBalance(activeBank); setBalanceInput(String(bankBalances[activeBank] ?? "")); }}
+                    className="flex items-center gap-1.5 group">
+                    <span className="text-xs font-bold" style={{ color: accent }}>
+                      {bankBalances[activeBank] != null ? fmt(bankBalances[activeBank]) + " ₫" : "— не задан —"}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground/60 group-hover:text-muted-foreground transition-colors">✏️</span>
+                  </button>
+                )}
+              </div>
+
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Использовано</span>
                 <span className="font-bold" style={{ color: warn ? "#f97316" : accent }}>
