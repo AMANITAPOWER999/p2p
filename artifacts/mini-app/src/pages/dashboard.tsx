@@ -217,6 +217,51 @@ export default function Dashboard() {
   const [orderPlacing, setOrderPlacing] = useState(false);
   const [orderResult, setOrderResult] = useState<Array<{ exchange: string; ok: boolean; msg: string }> | null>(null);
 
+  // ── Авто-курс: живой виджет (обновляется каждые 60 сек) ──
+  const [autoRate, setAutoRate] = useState<{
+    market: { avgBuy: number; avgSell: number; mid: number };
+    ourBuy: number; ourSell: number;
+    updatedAt: string;
+  } | null>(null);
+  const [autoRateLoading, setAutoRateLoading] = useState(false);
+  const [autoRateError, setAutoRateError] = useState<string | null>(null);
+  const [autoRateCountdown, setAutoRateCountdown] = useState(60);
+  const autoRateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoRateCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function fetchAutoRate() {
+    setAutoRateLoading(true);
+    setAutoRateError(null);
+    try {
+      const r = await fetch(`${BASE}api/p2p/auto-rate?coin=USDT&currency=VND`);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      setAutoRate(d);
+      setAutoRateCountdown(60);
+    } catch (e: any) {
+      setAutoRateError(e.message ?? "Ошибка");
+    } finally {
+      setAutoRateLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (orderMode !== "auto") {
+      if (autoRateTimerRef.current) clearInterval(autoRateTimerRef.current);
+      if (autoRateCountdownRef.current) clearInterval(autoRateCountdownRef.current);
+      return;
+    }
+    fetchAutoRate();
+    autoRateTimerRef.current = setInterval(fetchAutoRate, 60_000);
+    autoRateCountdownRef.current = setInterval(() => {
+      setAutoRateCountdown(c => (c <= 1 ? 60 : c - 1));
+    }, 1_000);
+    return () => {
+      if (autoRateTimerRef.current) clearInterval(autoRateTimerRef.current);
+      if (autoRateCountdownRef.current) clearInterval(autoRateCountdownRef.current);
+    };
+  }, [orderMode]);
+
   async function fetchMarketPrice() {
     setMarketLoading(true);
     setMarketError(null);
@@ -586,30 +631,92 @@ export default function Dashboard() {
             </select>
           </div>
 
-          {/* Авто режим: кнопка получить рыночный курс */}
+          {/* Авто курс: живой виджет с 1.2% спредом */}
           {orderMode === "auto" && (
             <div className="space-y-2">
-              <button onClick={fetchMarketPrice} disabled={marketLoading}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm font-semibold disabled:opacity-50 hover:bg-yellow-500/20 transition-colors">
-                {marketLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                {marketLoading ? "Загрузка..." : "Получить рыночный курс (Bybit P2P)"}
-              </button>
-              {marketError && (
-                <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{marketError}</div>
-              )}
-              {marketData && (
-                <div className="space-y-1.5">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Топ-3 объявления ({orderSide === "BUY" ? "покупка" : "продажа"})</div>
-                  {marketData.top3.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-white/5">
-                      <span className="text-muted-foreground truncate max-w-[120px]">{i + 1}. {item.nickname}</span>
-                      <span className="font-bold text-foreground">{item.price.toLocaleString("ru")} ₫</span>
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-between px-2 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10">
-                    <span className="text-xs font-bold text-yellow-400">Средний курс</span>
-                    <span className="text-sm font-bold text-yellow-300">{marketData.avg.toLocaleString("ru")} ₫</span>
+              {/* Статус / таймер */}
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  {autoRateLoading
+                    ? <><Loader2 className="w-3 h-3 animate-spin text-yellow-400" /><span className="text-yellow-400">Обновление…</span></>
+                    : <><Zap className="w-3 h-3 text-yellow-400" /><span>Bybit P2P · спред 1.2%</span></>}
+                </div>
+                {!autoRateLoading && (
+                  <div className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                    <span>обновление через {autoRateCountdown}с</span>
                   </div>
+                )}
+              </div>
+
+              {autoRateError && (
+                <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 flex items-center justify-between">
+                  <span>⚠️ {autoRateError}</span>
+                  <button onClick={fetchAutoRate} className="text-red-300 underline ml-2">Повтор</button>
+                </div>
+              )}
+
+              {autoRate && (
+                <div className="space-y-2">
+                  {/* Основные цены — покупка и продажа */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => { setOrderSide("BUY"); setManualPrice(String(autoRate.ourBuy)); }}
+                      className="rounded-xl border p-3 text-left transition-all hover:brightness-110 active:scale-95"
+                      style={{ background: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)" }}>
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-green-400 mb-1 flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3" /> Покупка
+                      </div>
+                      <div className="text-lg font-black text-green-300 leading-none">
+                        {autoRate.ourBuy.toLocaleString("ru")}
+                      </div>
+                      <div className="text-[10px] text-green-400/60 mt-0.5">₫ / USDT</div>
+                    </button>
+                    <button
+                      onClick={() => { setOrderSide("SELL"); setManualPrice(String(autoRate.ourSell)); }}
+                      className="rounded-xl border p-3 text-left transition-all hover:brightness-110 active:scale-95"
+                      style={{ background: "rgba(239,68,68,0.10)", borderColor: "rgba(239,68,68,0.35)" }}>
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1 flex items-center gap-1">
+                        <TrendingDown className="w-3 h-3" /> Продажа
+                      </div>
+                      <div className="text-lg font-black text-red-300 leading-none">
+                        {autoRate.ourSell.toLocaleString("ru")}
+                      </div>
+                      <div className="text-[10px] text-red-400/60 mt-0.5">₫ / USDT</div>
+                    </button>
+                  </div>
+
+                  {/* Рыночные данные (мелко) */}
+                  <div className="rounded-lg border px-3 py-2 space-y-1"
+                    style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.08)" }}>
+                    <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Рынок Bybit (топ-5 ср.)</div>
+                    <div className="grid grid-cols-3 gap-1 text-center">
+                      <div>
+                        <div className="text-[9px] text-muted-foreground">Покупка рынок</div>
+                        <div className="text-[11px] font-bold text-green-400">{autoRate.market.avgBuy.toLocaleString("ru")}</div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-muted-foreground">Mid</div>
+                        <div className="text-[11px] font-bold text-yellow-300">{autoRate.market.mid.toLocaleString("ru")}</div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-muted-foreground">Продажа рынок</div>
+                        <div className="text-[11px] font-bold text-red-400">{autoRate.market.avgSell.toLocaleString("ru")}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-[9px] text-muted-foreground text-center">
+                    Нажмите на цену — она подставится в поле ниже
+                  </div>
+                </div>
+              )}
+
+              {/* Скелетон при первой загрузке */}
+              {!autoRate && autoRateLoading && (
+                <div className="grid grid-cols-2 gap-2 animate-pulse">
+                  <div className="rounded-xl h-20 bg-white/5 border border-white/10" />
+                  <div className="rounded-xl h-20 bg-white/5 border border-white/10" />
                 </div>
               )}
             </div>
