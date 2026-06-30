@@ -12,6 +12,7 @@ import mexcSyncRouter from "./mexc-sync";
 import bybitReleaseRouter from "./bybit-release";
 import p2pMarketRouter from "./p2p-market";
 import autoReleaseRouter from "./auto-release";
+import smsWebhookRouter from "./sms-webhook";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(mexcSyncRouter);
 router.use(bybitReleaseRouter);
 router.use(p2pMarketRouter);
 router.use(autoReleaseRouter);
+router.use(smsWebhookRouter);
 
 export default router;

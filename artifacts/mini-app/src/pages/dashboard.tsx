@@ -162,6 +162,33 @@ export default function Dashboard() {
   const AMOUNT_MIN = 130_000;
   const AMOUNT_MAX = 9_999_999;
 
+  // ── SMS лог ──────────────────────────────────────────────────────────────────
+  const [smsEvents, setSmsEvents] = useState<Array<{
+    id: string; receivedAt: string; bank: string | null; sender: string | null;
+    amount: number | null; currency: string; rawText: string;
+    matched: boolean; matchedOrderId: string | null;
+    released: boolean; releaseResult: string | null;
+  }>>([]);
+  const [smsLoading, setSmsLoading] = useState(false);
+  const smsWebhookUrl = `${window.location.origin.replace(/:\d+$/, ":8080")}/api/sms/webhook`;
+
+  useEffect(() => {
+    let dead = false;
+    async function loadSms() {
+      setSmsLoading(true);
+      try {
+        const r = await fetch(`${BASE}api/sms/log`);
+        const d = await r.json();
+        if (!dead) setSmsEvents(d.events ?? []);
+      } catch { /* silent */ } finally {
+        if (!dead) setSmsLoading(false);
+      }
+    }
+    loadSms();
+    const t = setInterval(loadSms, 15_000);
+    return () => { dead = true; clearInterval(t); };
+  }, []);
+
   // Bybit P2P сделки из БД — загружаем для секции мерчантов
   const [bybitTrades, setBybitTrades] = useState<Array<{
     id: number; side: string; asset: string; fiatCurrency: string;
@@ -1235,6 +1262,117 @@ export default function Dashboard() {
           </div>
         );
       })()}
+
+      {/* ── SMS от MacroDroid ── */}
+      <SectionTitle id="sms">SMS от банков (MacroDroid)</SectionTitle>
+
+      {/* URL для MacroDroid */}
+      <div className="rounded-xl border p-3 space-y-2"
+        style={{ background: "rgba(77,166,255,0.07)", borderColor: "rgba(77,166,255,0.20)" }}>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Webhook URL для MacroDroid</div>
+        <div className="font-mono text-[11px] break-all text-foreground bg-black/30 rounded-lg px-2 py-2 select-all">
+          {`${BASE}api/sms/webhook`.replace(/^\//, `${typeof window !== "undefined" ? window.location.origin : ""}/`)}
+        </div>
+        <div className="text-[10px] text-muted-foreground space-y-0.5">
+          <div>Метод: <span className="text-foreground font-semibold">POST</span> · Content-Type: <span className="text-foreground font-semibold">application/json</span></div>
+          <div>Тело: <span className="font-mono text-blue-300">{`{"body": "[Сообщение]", "address": "[Номер]"}`}</span></div>
+        </div>
+      </div>
+
+      {/* Лог */}
+      {smsLoading && smsEvents.length === 0 && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Загрузка…
+        </div>
+      )}
+      {smsEvents.length === 0 && !smsLoading && (
+        <div className="text-center py-6 rounded-xl border border-dashed border-white/10 text-muted-foreground text-sm">
+          SMS ещё не получены. Настройте MacroDroid и отправьте тестовый вебхук.
+        </div>
+      )}
+      {smsEvents.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] text-muted-foreground">Последние {smsEvents.length} SMS · обновление каждые 15с</div>
+            <div className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-[10px] text-muted-foreground">live</span>
+            </div>
+          </div>
+          {smsEvents.map(ev => (
+            <div key={ev.id} className="rounded-xl border p-3 space-y-1.5"
+              style={{
+                background: ev.released
+                  ? "rgba(34,197,94,0.08)"
+                  : ev.matched
+                  ? "rgba(234,179,8,0.08)"
+                  : "rgba(255,255,255,0.06)",
+                borderColor: ev.released
+                  ? "rgba(34,197,94,0.30)"
+                  : ev.matched
+                  ? "rgba(234,179,8,0.30)"
+                  : "rgba(255,255,255,0.10)",
+              }}>
+              {/* Шапка: статус + время */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {ev.released && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border text-green-400 bg-green-500/10 border-green-500/30">
+                      ✓ Выпущено
+                    </span>
+                  )}
+                  {ev.matched && !ev.released && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border text-yellow-400 bg-yellow-500/10 border-yellow-500/30">
+                      ⚡ Совпало
+                    </span>
+                  )}
+                  {!ev.matched && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border text-muted-foreground border-white/10">
+                      SMS
+                    </span>
+                  )}
+                  {ev.bank && (
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${BANK_COLOR[ev.bank] ?? "text-muted-foreground border-white/10"}`}>
+                      {ev.bank}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {new Date(ev.receivedAt).toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </span>
+              </div>
+
+              {/* Сумма */}
+              {ev.amount != null && (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-black text-foreground leading-none">
+                    {ev.amount.toLocaleString("ru")}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">₫</span>
+                </div>
+              )}
+
+              {/* Ордер */}
+              {ev.matchedOrderId && (
+                <div className="text-[10px] text-yellow-400">
+                  Ордер: <span className="font-mono">{ev.matchedOrderId}</span>
+                  {ev.releaseResult && <span className="ml-1 text-muted-foreground">· {ev.releaseResult}</span>}
+                </div>
+              )}
+
+              {/* Отправитель */}
+              {ev.sender && (
+                <div className="text-[10px] text-muted-foreground">📱 {ev.sender}</div>
+              )}
+
+              {/* Текст SMS */}
+              <div className="text-[10px] text-muted-foreground/60 leading-relaxed line-clamp-2 font-mono">
+                {ev.rawText}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="h-4" />
       </div>{/* end px-3 space-y-4 */}
