@@ -89,12 +89,16 @@ async function findMatchingBybitOrder(amount: number): Promise<string | null> {
 router.post("/sms/webhook", async (req, res) => {
   try {
     const body = req.body as Record<string, unknown>;
+    const query = req.query as Record<string, unknown>;
 
+    // Принимаем из тела (JSON) ИЛИ из URL-параметров (?body=...&address=...)
     const rawText = String(
-      body["text"] ?? body["sms"] ?? body["body"] ?? body["message"] ?? body["content"] ?? ""
+      body["text"] ?? body["sms"] ?? body["body"] ?? body["message"] ?? body["content"] ??
+      query["text"] ?? query["sms"] ?? query["body"] ?? query["message"] ?? query["content"] ?? ""
     );
     const sender = String(
-      body["sender"] ?? body["from"] ?? body["address"] ?? body["phone"] ?? ""
+      body["sender"] ?? body["from"] ?? body["address"] ?? body["phone"] ??
+      query["sender"] ?? query["from"] ?? query["address"] ?? query["phone"] ?? ""
     ) || null;
 
     const amount = body["amount"] != null
