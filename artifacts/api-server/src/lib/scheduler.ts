@@ -1,6 +1,8 @@
 import { logger } from "./logger";
 import { getMexcC2COrdersWeb, mapMexcStatusToInternal, mapMexcTradeType, type MexcC2CWebOrder } from "./mexc";
 import { getBybitP2POrders, getBybitPaidOrders, releaseBybitOrder, mapBybitStatus, mapBybitSide, type BybitP2POrder } from "./bybit";
+import { getOkxPaidOrders, releaseOkxOrder } from "./okx";
+import { getGatePaidOrders, releaseGateOrder } from "./gate";
 import { db, tradesTable, accountsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
@@ -252,43 +254,91 @@ export const autoReleaseState: AutoReleaseState = {
 // Множество уже обработанных orderId (чтобы не дублировать)
 const releasedOrderIds = new Set<string>();
 
+async function releaseExchangeOrder(exchange: string, orderId: string): Promise<boolean> {
+  try {
+    let result: { success: boolean; message: string };
+    if (exchange === "bybit") {
+      const k = process.env["BYBIT_API_KEY"]!;
+      const s = process.env["BYBIT_API_SECRET"]!;
+      result = await releaseBybitOrder(k, s, orderId);
+    } else if (exchange === "okx") {
+      const k = process.env["OKX_API_KEY"]!;
+      const s = process.env["OKX_API"]!;
+      const p = process.env["OKX_PASSPHRASE"] ?? "";
+      result = await releaseOkxOrder(k, s, p, orderId);
+    } else if (exchange === "gate") {
+      const k = process.env["GATE_API_KEY"]!;
+      const s = process.env["GATE_API"]!;
+      result = await releaseGateOrder(k, s, orderId);
+    } else {
+      return false;
+    }
+    logger.info({ exchange, orderId, success: result.success, msg: result.message }, "Auto-release: released order");
+    return result.success;
+  } catch (err) {
+    logger.warn({ err, exchange, orderId }, "Auto-release: release error");
+    return false;
+  }
+}
+
 export async function runAutoRelease(): Promise<void> {
   if (autoReleaseState.running) return;
-  const apiKey = process.env["BYBIT_API_KEY"];
-  const apiSecret = process.env["BYBIT_API_SECRET"];
-  if (!apiKey || !apiSecret) return;
-
   autoReleaseState.running = true;
   autoReleaseState.lastCheckAt = new Date();
 
   try {
-    const paidOrders = await getBybitPaidOrders(apiKey, apiSecret);
-    logger.info({ paidCount: paidOrders.length }, "Auto-release: checked paid orders");
+    const tasks: Array<{ exchange: string; orderId: string }> = [];
 
-    for (const order of paidOrders) {
-      const orderId = String(order.id ?? order.orderId ?? "");
-      if (!orderId || releasedOrderIds.has(orderId)) continue;
-      releasedOrderIds.add(orderId);
+    // Bybit
+    const bybitKey = process.env["BYBIT_API_KEY"];
+    const bybitSecret = process.env["BYBIT_API_SECRET"];
+    if (bybitKey && bybitSecret) {
+      const paidOrders = await getBybitPaidOrders(bybitKey, bybitSecret);
+      for (const o of paidOrders) {
+        const id = String(o.id ?? o.orderId ?? "");
+        if (id) tasks.push({ exchange: "bybit", orderId: id });
+      }
+    }
+
+    // OKX
+    const okxKey = process.env["OKX_API_KEY"];
+    const okxSecret = process.env["OKX_API"];
+    const okxPass = process.env["OKX_PASSPHRASE"] ?? "";
+    if (okxKey && okxSecret) {
+      const paidOrders = await getOkxPaidOrders(okxKey, okxSecret, okxPass);
+      for (const o of paidOrders) tasks.push({ exchange: "okx", orderId: o.ordId });
+    }
+
+    // Gate
+    const gateKey = process.env["GATE_API_KEY"];
+    const gateSecret = process.env["GATE_API"];
+    if (gateKey && gateSecret) {
+      const paidOrders = await getGatePaidOrders(gateKey, gateSecret);
+      for (const o of paidOrders) tasks.push({ exchange: "gate", orderId: o.id });
+    }
+
+    logger.info({ paidCount: tasks.length }, "Auto-release: checked paid orders across exchanges");
+
+    for (const { exchange, orderId } of tasks) {
+      const key = `${exchange}:${orderId}`;
+      if (!orderId || releasedOrderIds.has(key)) continue;
+      releasedOrderIds.add(key);
 
       if (autoReleaseState.delayMs > 0) {
         await new Promise(r => setTimeout(r, autoReleaseState.delayMs));
       }
 
-      const result = await releaseBybitOrder(apiKey, apiSecret, orderId);
-      logger.info({ orderId, success: result.success, msg: result.message }, "Auto-release: released order");
+      const success = await releaseExchangeOrder(exchange, orderId);
 
-      if (result.success) {
+      if (success) {
         autoReleaseState.releasedCount++;
-        autoReleaseState.lastReleased.unshift({ orderId, at: new Date() });
+        autoReleaseState.lastReleased.unshift({ orderId: `${exchange}:${orderId}`, at: new Date() });
         if (autoReleaseState.lastReleased.length > 20) autoReleaseState.lastReleased.pop();
-
-        // Обновляем статус в БД
         await db.update(tradesTable)
           .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
           .where(eq(tradesTable.exchangeTradeId, orderId));
       } else {
-        // Убираем из множества, чтобы попробовать снова
-        releasedOrderIds.delete(orderId);
+        releasedOrderIds.delete(key);
       }
     }
   } catch (err) {

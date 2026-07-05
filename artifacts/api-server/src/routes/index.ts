@@ -13,6 +13,8 @@ import bybitReleaseRouter from "./bybit-release";
 import p2pMarketRouter from "./p2p-market";
 import autoReleaseRouter from "./auto-release";
 import smsWebhookRouter from "./sms-webhook";
+import okxReleaseRouter from "./okx-release";
+import gateReleaseRouter from "./gate-release";
 
 const router: IRouter = Router();
 
@@ -30,5 +32,7 @@ router.use(bybitReleaseRouter);
 router.use(p2pMarketRouter);
 router.use(autoReleaseRouter);
 router.use(smsWebhookRouter);
+router.use(okxReleaseRouter);
+router.use(gateReleaseRouter);
 
 export default router;
