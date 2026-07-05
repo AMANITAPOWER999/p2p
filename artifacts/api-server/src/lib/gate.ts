@@ -25,6 +25,7 @@ async function gateGet(apiKey: string, apiSecret: string, path: string, params: 
     },
   });
   const text = await res.text();
+  if (!text.trim()) return [];
   try { return JSON.parse(text); } catch { return { error: text, status: res.status }; }
 }
 

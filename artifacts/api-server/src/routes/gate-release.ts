@@ -4,8 +4,8 @@ import { getGateP2POrders, releaseGateOrder } from "../lib/gate";
 const router = Router();
 
 router.get("/gate/orders", async (req, res) => {
-  const apiKey = process.env["GATE_API_KEY"];
-  const secret = process.env["GATE_API"];
+  const apiKey = process.env["GATE_API"];
+  const secret = process.env["GATE_API_KEY"];
 
   if (!apiKey || !secret) {
     res.json({ orders: [], total: 0, note: "Gate ключи не настроены (GATE_API_KEY, GATE_API)" });
@@ -22,8 +22,8 @@ router.get("/gate/orders", async (req, res) => {
 
 router.post("/gate/release/:orderId", async (req, res) => {
   const { orderId } = req.params;
-  const apiKey = process.env["GATE_API_KEY"];
-  const secret = process.env["GATE_API"];
+  const apiKey = process.env["GATE_API"];
+  const secret = process.env["GATE_API_KEY"];
 
   if (!apiKey || !secret) {
     res.status(400).json({ error: "Gate ключи не настроены" });

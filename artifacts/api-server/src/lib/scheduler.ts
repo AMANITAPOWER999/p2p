@@ -267,8 +267,8 @@ async function releaseExchangeOrder(exchange: string, orderId: string): Promise<
       const p = process.env["OKX_PASSPHRASE"] ?? "";
       result = await releaseOkxOrder(k, s, p, orderId);
     } else if (exchange === "gate") {
-      const k = process.env["GATE_API_KEY"]!;
-      const s = process.env["GATE_API"]!;
+      const k = process.env["GATE_API"]!;
+      const s = process.env["GATE_API_KEY"]!;
       result = await releaseGateOrder(k, s, orderId);
     } else {
       return false;
@@ -310,8 +310,8 @@ export async function runAutoRelease(): Promise<void> {
     }
 
     // Gate
-    const gateKey = process.env["GATE_API_KEY"];
-    const gateSecret = process.env["GATE_API"];
+    const gateKey = process.env["GATE_API"];
+    const gateSecret = process.env["GATE_API_KEY"];
     if (gateKey && gateSecret) {
       const paidOrders = await getGatePaidOrders(gateKey, gateSecret);
       for (const o of paidOrders) tasks.push({ exchange: "gate", orderId: o.id });
