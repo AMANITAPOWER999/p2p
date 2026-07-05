@@ -4,8 +4,8 @@ import { getOkxP2POrders, releaseOkxOrder } from "../lib/okx";
 const router = Router();
 
 router.get("/okx/orders", async (req, res) => {
-  const apiKey = process.env["OKX_API_KEY"];
-  const secret = process.env["OKX_API"];
+  const apiKey = process.env["OKX_API"];
+  const secret = process.env["OKX_API_KEY"];
   const passphrase = process.env["OKX_PASSPHRASE"] ?? "";
 
   if (!apiKey || !secret) {
@@ -23,8 +23,8 @@ router.get("/okx/orders", async (req, res) => {
 
 router.post("/okx/release/:orderId", async (req, res) => {
   const { orderId } = req.params;
-  const apiKey = process.env["OKX_API_KEY"];
-  const secret = process.env["OKX_API"];
+  const apiKey = process.env["OKX_API"];
+  const secret = process.env["OKX_API_KEY"];
   const passphrase = process.env["OKX_PASSPHRASE"] ?? "";
 
   if (!apiKey || !secret) {

@@ -262,8 +262,8 @@ async function releaseExchangeOrder(exchange: string, orderId: string): Promise<
       const s = process.env["BYBIT_API_SECRET"]!;
       result = await releaseBybitOrder(k, s, orderId);
     } else if (exchange === "okx") {
-      const k = process.env["OKX_API_KEY"]!;
-      const s = process.env["OKX_API"]!;
+      const k = process.env["OKX_API"]!;
+      const s = process.env["OKX_API_KEY"]!;
       const p = process.env["OKX_PASSPHRASE"] ?? "";
       result = await releaseOkxOrder(k, s, p, orderId);
     } else if (exchange === "gate") {
@@ -301,8 +301,8 @@ export async function runAutoRelease(): Promise<void> {
     }
 
     // OKX
-    const okxKey = process.env["OKX_API_KEY"];
-    const okxSecret = process.env["OKX_API"];
+    const okxKey = process.env["OKX_API"];
+    const okxSecret = process.env["OKX_API_KEY"];
     const okxPass = process.env["OKX_PASSPHRASE"] ?? "";
     if (okxKey && okxSecret) {
       const paidOrders = await getOkxPaidOrders(okxKey, okxSecret, okxPass);
