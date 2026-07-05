@@ -55,6 +55,84 @@ router.get("/p2p/auto-rate", async (req, res) => {
   }
 });
 
+async function fetchBybitTop(coin: string, currency: string, side: "buy" | "sell", amount: number) {
+  const body: Record<string, string> = {
+    tokenId: coin,
+    currencyId: currency,
+    side: side === "buy" ? "1" : "0",
+    size: "10",
+    page: "1",
+  };
+  if (amount > 0) body.amount = String(amount);
+  const resp = await fetch("https://api2.bybit.com/fiat/otc/item/online", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json: any = await resp.json();
+  const items: any[] = json?.result?.items ?? [];
+  return items.slice(0, 5).map((it: any, i: number) => ({
+    rank: i + 1,
+    nickname: it.nickName ?? String(it.userId).slice(0, 8),
+    price: parseFloat(it.price),
+    minAmount: parseFloat(it.minAmount ?? "0"),
+    maxAmount: parseFloat(it.maxAmount ?? "0"),
+  }));
+}
+
+async function fetchOkxTop(coin: string, currency: string, side: "buy" | "sell", amount: number) {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const body: Record<string, string> = {
+      side: side === "buy" ? "buy" : "sell",
+      baseCurrency: coin,
+      quoteCurrency: currency,
+      paymentMethod: "",
+      userType: "all",
+      showTrade: "0",
+      showFollow: "0",
+      showAlreadyTraded: "0",
+      isAbleFilter: "0",
+    };
+    if (amount > 0) body.amount = String(amount);
+    const resp = await fetch("https://www.okx.com/v3/c2c/tradingOrders/books", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json",
+        "Origin": "https://www.okx.com", "Referer": "https://www.okx.com/p2p-markets/vnd/" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    const json: any = await resp.json();
+    const items: any[] = (side === "buy" ? json?.data?.buy : json?.data?.sell) ?? [];
+    return items.slice(0, 5).map((it: any, i: number) => ({
+      rank: i + 1,
+      nickname: it.nickName ?? it.publicUserId?.slice(0, 8) ?? "—",
+      price: parseFloat(it.price),
+      minAmount: parseFloat(it.minSingleTransAmount ?? it.minAmount ?? "0"),
+      maxAmount: parseFloat(it.maxSingleTransAmount ?? it.maxAmount ?? "0"),
+    }));
+  } catch { return []; }
+}
+
+router.get("/p2p/top-sellers", async (req, res) => {
+  const exchange = ((req.query.exchange as string) ?? "bybit").toLowerCase();
+  const side     = ((req.query.side as string) ?? "sell").toLowerCase() as "buy" | "sell";
+  const coin     = (req.query.coin as string) ?? "USDT";
+  const currency = (req.query.currency as string) ?? "VND";
+  const amount   = parseFloat((req.query.amount as string) ?? "0");
+  try {
+    const top = exchange === "okx"
+      ? await fetchOkxTop(coin, currency, side, amount)
+      : await fetchBybitTop(coin, currency, side, amount);
+    return res.json({ exchange, side, coin, currency, amount, top });
+  } catch (e: any) {
+    logger.error({ err: e }, "p2p top-sellers error");
+    return res.status(500).json({ error: e.message, top: [] });
+  }
+});
+
 router.get("/p2p/market-price", async (req, res) => {
   const exchange = ((req.query.exchange as string) ?? "bybit").toLowerCase();
   const side     = ((req.query.side as string) ?? "BUY").toUpperCase();

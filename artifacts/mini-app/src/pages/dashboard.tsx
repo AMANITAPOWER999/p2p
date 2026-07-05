@@ -256,6 +256,41 @@ export default function Dashboard() {
   const autoRateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoRateCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── Топ-5 по бирже, стороне и сумме ──
+  type TopSeller = { rank: number; nickname: string; price: number; minAmount: number; maxAmount: number };
+  type TopSellersData = {
+    bybit_150k_buy: TopSeller[]; bybit_150k_sell: TopSeller[];
+    bybit_10m_buy: TopSeller[];  bybit_10m_sell: TopSeller[];
+    okx_150k_buy: TopSeller[];   okx_150k_sell: TopSeller[];
+    okx_10m_buy: TopSeller[];    okx_10m_sell: TopSeller[];
+  };
+  const [topSellersExchange, setTopSellersExchange] = useState<"bybit" | "okx">("bybit");
+  const [topSellersAmount, setTopSellersAmount] = useState<"150k" | "10m">("150k");
+  const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
+  const [topSellersLoading, setTopSellersLoading] = useState(false);
+
+  async function fetchTopSellers() {
+    setTopSellersLoading(true);
+    try {
+      const q = (ex: string, side: string, amt: number) =>
+        fetch(`${BASE}api/p2p/top-sellers?exchange=${ex}&side=${side}&amount=${amt}`).then(r => r.json()).catch(() => ({ top: [] }));
+      const [bb150, bs150, bb10m, bs10m, ob150, os150, ob10m, os10m] = await Promise.all([
+        q("bybit","buy",150000), q("bybit","sell",150000),
+        q("bybit","buy",10000000), q("bybit","sell",10000000),
+        q("okx","buy",150000), q("okx","sell",150000),
+        q("okx","buy",10000000), q("okx","sell",10000000),
+      ]);
+      setTopSellers({
+        bybit_150k_buy: bb150.top ?? [], bybit_150k_sell: bs150.top ?? [],
+        bybit_10m_buy: bb10m.top ?? [],  bybit_10m_sell: bs10m.top ?? [],
+        okx_150k_buy: ob150.top ?? [],   okx_150k_sell: os150.top ?? [],
+        okx_10m_buy: ob10m.top ?? [],    okx_10m_sell: os10m.top ?? [],
+      });
+    } catch { /* silent */ } finally {
+      setTopSellersLoading(false);
+    }
+  }
+
   async function fetchAutoRate() {
     setAutoRateLoading(true);
     setAutoRateError(null);
@@ -279,7 +314,8 @@ export default function Dashboard() {
       return;
     }
     fetchAutoRate();
-    autoRateTimerRef.current = setInterval(fetchAutoRate, 60_000);
+    fetchTopSellers();
+    autoRateTimerRef.current = setInterval(() => { fetchAutoRate(); fetchTopSellers(); }, 60_000);
     autoRateCountdownRef.current = setInterval(() => {
       setAutoRateCountdown(c => (c <= 1 ? 60 : c - 1));
     }, 1_000);
@@ -746,6 +782,85 @@ export default function Dashboard() {
                   <div className="rounded-xl h-20 bg-white/5 border border-white/10" />
                 </div>
               )}
+
+              {/* Топ-5 покупка / продажа */}
+              <div className="rounded-xl border overflow-hidden"
+                style={{ background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.10)" }}>
+                {/* Заголовок + вкладки биржи */}
+                <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5"
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Топ-5 · USDT/VND</span>
+                  <div className="flex rounded-md overflow-hidden border" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
+                    {(["bybit", "okx"] as const).map(ex => (
+                      <button key={ex} onClick={() => setTopSellersExchange(ex)}
+                        className={`px-2.5 py-0.5 text-[9px] font-bold uppercase transition-all ${
+                          topSellersExchange === ex
+                            ? "bg-yellow-400/20 text-yellow-300"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}>
+                        {ex === "bybit" ? "Bybit" : "OKX"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Вкладки суммы */}
+                <div className="flex px-3 pt-2 gap-2">
+                  {([["150k", "от 150 000 ₫"], ["10m", "от 10 000 000 ₫"]] as const).map(([key, label]) => (
+                    <button key={key} onClick={() => setTopSellersAmount(key)}
+                      className={`text-[9px] px-2 py-0.5 rounded-full border transition-all font-semibold ${
+                        topSellersAmount === key
+                          ? "bg-blue-500/20 border-blue-400/40 text-blue-300"
+                          : "border-white/10 text-muted-foreground hover:text-foreground"
+                      }`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Две колонки: Покупка | Продажа */}
+                {(() => {
+                  const ex = topSellersExchange;
+                  const am = topSellersAmount;
+                  const buyList  = topSellers ? topSellers[`${ex}_${am}_buy`  as keyof TopSellersData] ?? [] : [];
+                  const sellList = topSellers ? topSellers[`${ex}_${am}_sell` as keyof TopSellersData] ?? [] : [];
+                  const renderRow = (s: TopSeller, i: number, side: "buy" | "sell") => (
+                    <div key={i} className="flex items-center gap-1 py-[2px]">
+                      <span className={`text-[8px] font-bold w-3 text-center shrink-0 ${i===0?"text-yellow-400":i===1?"text-slate-300":i===2?"text-orange-400":"text-muted-foreground"}`}>{i+1}</span>
+                      <span className="text-[9px] text-foreground/70 flex-1 truncate">{s.nickname}</span>
+                      <span className={`text-[10px] font-black shrink-0 ${side==="buy"?"text-green-300":"text-red-300"}`}>{s.price.toLocaleString("ru")}</span>
+                    </div>
+                  );
+                  const renderEmpty = () => (
+                    <div className="text-[9px] text-muted-foreground text-center py-2">—</div>
+                  );
+                  const skeleton = (
+                    <div className="space-y-1 animate-pulse">
+                      {[1,2,3,4,5].map(i => <div key={i} className="h-5 rounded bg-white/5" />)}
+                    </div>
+                  );
+                  return (
+                    <div className="grid grid-cols-2 divide-x px-0 pb-2" style={{ divideColor: "rgba(255,255,255,0.07)" }}>
+                      {/* Покупка (BUY) */}
+                      <div className="px-2.5 pt-2">
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <TrendingUp className="w-2.5 h-2.5 text-green-400" />
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-green-400">Покупка</span>
+                        </div>
+                        {topSellersLoading && !topSellers ? skeleton : buyList.length ? buyList.map((s,i) => renderRow(s,i,"buy")) : renderEmpty()}
+                      </div>
+                      {/* Продажа (SELL) */}
+                      <div className="px-2.5 pt-2" style={{ borderLeft: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <TrendingDown className="w-2.5 h-2.5 text-red-400" />
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-red-400">Продажа</span>
+                        </div>
+                        {topSellersLoading && !topSellers ? skeleton : sellList.length ? sellList.map((s,i) => renderRow(s,i,"sell")) : renderEmpty()}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
 
