@@ -271,6 +271,20 @@ export default function Dashboard() {
   const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
   const [topSellersLoading, setTopSellersLoading] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<{ side: "buy" | "sell"; rank: number } | null>(null);
+  // ── Hold position (ТОП-1…5 авто-удержание) ──
+  const [holdPosition, setHoldPosition] = useState<number | null>(null);
+  const [topSellersCountdown, setTopSellersCountdown] = useState(15);
+  const topSellersTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const topSellersCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Refs to avoid stale closures inside interval callbacks
+  const holdPositionRef = useRef<number | null>(null);
+  const topSellersExchangeRef = useRef<"bybit" | "okx">("bybit");
+  const topSellersAmountRef = useRef<"150k" | "10m">("150k");
+  const orderSidesRef = useRef<Set<"BUY" | "SELL">>(new Set(["BUY", "SELL"]));
+  useEffect(() => { holdPositionRef.current = holdPosition; }, [holdPosition]);
+  useEffect(() => { topSellersExchangeRef.current = topSellersExchange; }, [topSellersExchange]);
+  useEffect(() => { topSellersAmountRef.current = topSellersAmount; }, [topSellersAmount]);
+  useEffect(() => { orderSidesRef.current = orderSides; }, [orderSides]);
 
   async function fetchTopSellers() {
     setTopSellersLoading(true);
@@ -283,12 +297,29 @@ export default function Dashboard() {
         q("okx","buy",150000), q("okx","sell",150000),
         q("okx","buy",10000000), q("okx","sell",10000000),
       ]);
-      setTopSellers({
+      const data: TopSellersData = {
         bybit_150k_buy: bb150.top ?? [], bybit_150k_sell: bs150.top ?? [],
         bybit_10m_buy: bb10m.top ?? [],  bybit_10m_sell: bs10m.top ?? [],
         okx_150k_buy: ob150.top ?? [],   okx_150k_sell: os150.top ?? [],
         okx_10m_buy: ob10m.top ?? [],    okx_10m_sell: os10m.top ?? [],
-      });
+      };
+      setTopSellers(data);
+      setTopSellersCountdown(15);
+      // Auto-hold: adjust price if hold mode is active
+      const hp = holdPositionRef.current;
+      if (hp !== null) {
+        const ex = topSellersExchangeRef.current;
+        const am = topSellersAmountRef.current;
+        const sides = orderSidesRef.current;
+        const buyList = data[`${ex}_${am}_buy` as keyof TopSellersData] ?? [];
+        const sellList = data[`${ex}_${am}_sell` as keyof TopSellersData] ?? [];
+        const idx = hp - 1;
+        if (sides.has("BUY") && buyList.length > idx) {
+          setManualPrice(String(buyList[idx].price + 1));
+        } else if (sides.has("SELL") && sellList.length > idx) {
+          setManualPrice(String(sellList[idx].price - 1));
+        }
+      }
     } catch { /* silent */ } finally {
       setTopSellersLoading(false);
     }
@@ -310,16 +341,29 @@ export default function Dashboard() {
     }
   }
 
+  // Auto-rate: refresh every 60s
   useEffect(() => {
     fetchAutoRate();
-    fetchTopSellers();
-    autoRateTimerRef.current = setInterval(() => { fetchAutoRate(); fetchTopSellers(); }, 60_000);
+    autoRateTimerRef.current = setInterval(() => fetchAutoRate(), 60_000);
     autoRateCountdownRef.current = setInterval(() => {
       setAutoRateCountdown(c => (c <= 1 ? 60 : c - 1));
     }, 1_000);
     return () => {
       if (autoRateTimerRef.current) clearInterval(autoRateTimerRef.current);
       if (autoRateCountdownRef.current) clearInterval(autoRateCountdownRef.current);
+    };
+  }, []);
+
+  // Top-sellers: refresh every 15s
+  useEffect(() => {
+    fetchTopSellers();
+    topSellersTimerRef.current = setInterval(() => fetchTopSellers(), 15_000);
+    topSellersCountdownRef.current = setInterval(() => {
+      setTopSellersCountdown(c => (c <= 1 ? 15 : c - 1));
+    }, 1_000);
+    return () => {
+      if (topSellersTimerRef.current) clearInterval(topSellersTimerRef.current);
+      if (topSellersCountdownRef.current) clearInterval(topSellersCountdownRef.current);
     };
   }, []);
 
@@ -777,13 +821,74 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {/* ── ТОП-1…5 кнопки удержания позиции ── */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Удержание позиции</span>
+                  {holdPosition !== null && (
+                    <button onClick={() => { setHoldPosition(null); holdPositionRef.current = null; }}
+                      className="text-[8px] px-2 py-0.5 rounded border border-red-400/30 bg-red-500/10 text-red-300 font-semibold">
+                      ✕ Стоп
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-5 gap-1">
+                  {[1,2,3,4,5].map(n => {
+                    const active = holdPosition === n;
+                    return (
+                      <button key={n}
+                        onClick={() => {
+                          const next = holdPosition === n ? null : n;
+                          setHoldPosition(next);
+                          holdPositionRef.current = next;
+                          if (next !== null) {
+                            // immediately apply price from current data
+                            if (topSellers) {
+                              const ex = topSellersExchangeRef.current;
+                              const am = topSellersAmountRef.current;
+                              const sides = orderSidesRef.current;
+                              const buyList = topSellers[`${ex}_${am}_buy` as keyof TopSellersData] ?? [];
+                              const sellList = topSellers[`${ex}_${am}_sell` as keyof TopSellersData] ?? [];
+                              const idx = next - 1;
+                              if (sides.has("BUY") && buyList.length > idx) setManualPrice(String(buyList[idx].price + 1));
+                              else if (sides.has("SELL") && sellList.length > idx) setManualPrice(String(sellList[idx].price - 1));
+                            }
+                          }
+                        }}
+                        className={`py-1.5 rounded-lg border text-[10px] font-black transition-all ${
+                          active
+                            ? "bg-yellow-400/20 border-yellow-400/60 text-yellow-300 shadow-[0_0_8px_rgba(250,204,21,0.3)] animate-pulse"
+                            : "border-white/15 text-muted-foreground hover:text-foreground hover:border-white/30"
+                        }`}
+                        style={!active ? { background: "rgba(255,255,255,0.06)" } : {}}>
+                        ТОП-{n}
+                      </button>
+                    );
+                  })}
+                </div>
+                {holdPosition !== null && (
+                  <div className="flex items-center gap-1.5 text-[9px] text-yellow-300 bg-yellow-400/8 border border-yellow-400/20 rounded-lg px-2.5 py-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping shrink-0" />
+                    <span>Бот держит <strong>ТОП-{holdPosition}</strong> · цена обновляется каждые 15 сек</span>
+                  </div>
+                )}
+              </div>
+
               {/* Топ-5 покупка / продажа */}
               <div className="rounded-xl border overflow-hidden"
                 style={{ background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.10)" }}>
                 {/* Заголовок + вкладки биржи */}
                 <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5"
                   style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Топ-5 · USDT/VND</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Топ-5 · USDT/VND</span>
+                    <div className="flex items-center gap-1">
+                      {topSellersLoading
+                        ? <Loader2 className="w-2.5 h-2.5 animate-spin text-yellow-400" />
+                        : <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+                      <span className="text-[8px] text-muted-foreground">{topSellersCountdown}с</span>
+                    </div>
+                  </div>
                   <div className="flex rounded-md overflow-hidden border" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                     {(["bybit", "okx"] as const).map(ex => (
                       <button key={ex} onClick={() => setTopSellersExchange(ex)}
