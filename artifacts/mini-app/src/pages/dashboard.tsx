@@ -928,9 +928,15 @@ export default function Dashboard() {
                       </button>
                     );
                   };
-                  const renderEmpty = () => (
-                    <div className="flex flex-col items-center gap-0.5 py-3 px-1">
-                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет данных</span>
+                  const renderEmpty = (side: "buy" | "sell") => (
+                    <div className="flex flex-col items-center gap-1 py-3 px-1">
+                      {ex === "bitget" ? (
+                        <span className="text-[8px] text-yellow-400/60 text-center leading-tight">
+                          Bitget P2P недоступен<br/>с сервера (US IP)
+                        </span>
+                      ) : (
+                        <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет объявлений</span>
+                      )}
                     </div>
                   );
                   const skeleton = (
@@ -947,7 +953,7 @@ export default function Dashboard() {
                           <span className="text-[8px] font-bold uppercase tracking-wider text-green-400">Покупка</span>
                         </div>
                         <div className="overflow-y-auto max-h-[160px] scrollbar-hide">
-                          {topSellersLoading && !topSellers ? skeleton : buyList.length ? buyList.map((s,i) => renderRow(s,i,"buy")) : renderEmpty()}
+                          {topSellersLoading && !topSellers ? skeleton : buyList.length ? buyList.map((s,i) => renderRow(s,i,"buy")) : renderEmpty("buy")}
                         </div>
                       </div>
                       {/* Продажа (SELL) */}
@@ -957,7 +963,7 @@ export default function Dashboard() {
                           <span className="text-[8px] font-bold uppercase tracking-wider text-red-400">Продажа</span>
                         </div>
                         <div className="overflow-y-auto max-h-[160px] scrollbar-hide">
-                          {topSellersLoading && !topSellers ? skeleton : sellList.length ? sellList.map((s,i) => renderRow(s,i,"sell")) : renderEmpty()}
+                          {topSellersLoading && !topSellers ? skeleton : sellList.length ? sellList.map((s,i) => renderRow(s,i,"sell")) : renderEmpty("sell")}
                         </div>
                       </div>
                     </div>
