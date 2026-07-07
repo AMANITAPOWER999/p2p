@@ -118,48 +118,44 @@ async function fetchOkxTop(coin: string, currency: string, side: "buy" | "sell",
 }
 
 async function fetchBitgetTop(coin: string, currency: string, side: "buy" | "sell", _amount: number) {
-  const apiKey    = process.env["BITGET_API_KEY"]    ?? "";
-  const secret    = process.env["BITGET_SECRET_KEY"] ?? "";
-  const passphrase = process.env["BITGET_PASSPHRASE"] ?? "";
-  if (!apiKey || !secret) return [];
+  const webToken = process.env["BITGET_WEB_TOKEN"] ?? "";
 
-  // tradeType: "buy" means buyers posting (you sell to them); "sell" = sellers posting (you buy from them)
-  const tradeType = side === "buy" ? "buy" : "sell";
-  const path = `/api/v2/p2p/advList?coin=${coin}&fiatCurrency=${currency}&tradeType=${tradeType}&page=1&pageSize=10`;
-  const ts   = Date.now().toString();
-  const sign = createHmac("sha256", secret).update(ts + "GET" + path).digest("base64");
-
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 6000);
-    const resp = await fetch("https://api.bitget.com" + path, {
-      headers: {
-        "ACCESS-KEY": apiKey,
-        "ACCESS-SIGN": sign,
-        "ACCESS-TIMESTAMP": ts,
-        "ACCESS-PASSPHRASE": passphrase,
-        "ACCESS-VERSION": "2",
-        "Content-Type": "application/json",
-      },
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    const json: any = await resp.json();
-    if (json.code !== "00000") {
-      logger.warn({ code: json.code, msg: json.msg }, "Bitget P2P advList non-success");
-      return [];
+  // Prefer web token (browser session) — gives access to the P2P marketplace listings
+  if (webToken) {
+    // tradeType: 1 = sell (merchant selling USDT), 2 = buy
+    const tradeType = side === "sell" ? "1" : "2";
+    const url = `https://www.bitget.com/v1/p2p/advertisement/list?coinName=${coin}&fiatCode=${currency}&tradeType=${tradeType}&pageNo=1&pageSize=10`;
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      const resp = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "application/json, text/plain, */*",
+          "Referer": "https://www.bitget.com/p2p-trading/",
+          "Cookie": webToken.includes("=") ? webToken : `Authorization=${webToken}`,
+          "Authorization": webToken.startsWith("Bearer ") ? webToken : (webToken.includes("=") ? "" : webToken),
+        },
+        signal: ctrl.signal,
+      });
+      clearTimeout(t);
+      const json: any = await resp.json();
+      if (json.code === "00000" && Array.isArray(json.data)) {
+        return (json.data as any[]).slice(0, 10).map((it: any, i: number) => ({
+          rank: i + 1,
+          nickname: it.nickName ?? it.merchantName ?? it.advertiserName ?? "—",
+          price: parseFloat(it.price ?? it.unitPrice ?? "0"),
+          minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
+          maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
+        }));
+      }
+      logger.warn({ code: json.code, msg: json.msg }, "Bitget web P2P non-success");
+    } catch (e) {
+      logger.warn({ err: String(e) }, "Bitget web P2P fetch error");
     }
-    const items: any[] = json?.data?.items ?? json?.data ?? [];
-    return items.slice(0, 5).map((it: any, i: number) => ({
-      rank: i + 1,
-      nickname: it.nickName ?? it.merchantName ?? String(it.merchantId ?? "").slice(0, 8),
-      price: parseFloat(it.price),
-      minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
-      maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
-    }));
-  } catch {
-    return [];
   }
+
+  return [];
 }
 
 router.get("/p2p/top-sellers", async (req, res) => {
