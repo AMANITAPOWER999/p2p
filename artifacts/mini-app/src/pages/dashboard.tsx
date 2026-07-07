@@ -278,10 +278,12 @@ export default function Dashboard() {
   const topSellersCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Refs to avoid stale closures inside interval callbacks
   const holdPositionRef = useRef<number | null>(null);
+  const topSellersRef = useRef<TopSellersData | null>(null);
   const topSellersExchangeRef = useRef<"bybit" | "okx">("bybit");
   const topSellersAmountRef = useRef<"150k" | "10m">("150k");
   const orderSidesRef = useRef<Set<"BUY" | "SELL">>(new Set(["BUY", "SELL"]));
   useEffect(() => { holdPositionRef.current = holdPosition; }, [holdPosition]);
+  useEffect(() => { topSellersRef.current = topSellers; }, [topSellers]);
   useEffect(() => { topSellersExchangeRef.current = topSellersExchange; }, [topSellersExchange]);
   useEffect(() => { topSellersAmountRef.current = topSellersAmount; }, [topSellersAmount]);
   useEffect(() => { orderSidesRef.current = orderSides; }, [orderSides]);
@@ -753,17 +755,21 @@ export default function Dashboard() {
                           const next = holdPosition === n ? null : n;
                           setHoldPosition(next);
                           holdPositionRef.current = next;
-                          if (next !== null) {
-                            // immediately apply price from current data
-                            if (topSellers) {
-                              const ex = topSellersExchangeRef.current;
-                              const am = topSellersAmountRef.current;
-                              const sides = orderSidesRef.current;
-                              const buyList = topSellers[`${ex}_${am}_buy` as keyof TopSellersData] ?? [];
-                              const sellList = topSellers[`${ex}_${am}_sell` as keyof TopSellersData] ?? [];
-                              const idx = next - 1;
-                              if (sides.has("BUY") && buyList.length > idx) setManualPrice(String(buyList[idx].price + 1));
-                              else if (sides.has("SELL") && sellList.length > idx) setManualPrice(String(sellList[idx].price - 1));
+                          // Always apply price on click (use ref to avoid stale closure)
+                          const data = topSellersRef.current;
+                          if (data) {
+                            const ex = topSellersExchangeRef.current;
+                            const am = topSellersAmountRef.current;
+                            const sides = orderSidesRef.current;
+                            const buyList = data[`${ex}_${am}_buy` as keyof TopSellersData] ?? [];
+                            const sellList = data[`${ex}_${am}_sell` as keyof TopSellersData] ?? [];
+                            const idx = n - 1;
+                            if (sides.has("SELL") && !sides.has("BUY") && sellList.length > idx) {
+                              setManualPrice(String(sellList[idx].price - 1));
+                            } else if (buyList.length > idx) {
+                              setManualPrice(String(buyList[idx].price + 1));
+                            } else if (sellList.length > idx) {
+                              setManualPrice(String(sellList[idx].price - 1));
                             }
                           }
                         }}
