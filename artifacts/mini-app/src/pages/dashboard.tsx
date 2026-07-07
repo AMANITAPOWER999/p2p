@@ -264,8 +264,11 @@ export default function Dashboard() {
   type TopSellersData = {
     bybit_150k_buy: TopSeller[];  bybit_150k_sell: TopSeller[];
     bybit_10m_buy: TopSeller[];   bybit_10m_sell: TopSeller[];
+    bitget_150k_buy: TopSeller[]; bitget_150k_sell: TopSeller[];
+    bitget_10m_buy: TopSeller[];  bitget_10m_sell: TopSeller[];
   };
-  const topSellersExchange = "bybit" as const;
+  const BITGET_WORKER_URL: string = (import.meta.env.VITE_BITGET_PROXY_URL as string) ?? "";
+  const [topSellersExchange, setTopSellersExchange] = useState<"bybit" | "bitget">("bybit");
   const [topSellersAmount, setTopSellersAmount] = useState<"150k" | "10m">("150k");
   const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
   const [topSellersLoading, setTopSellersLoading] = useState(false);
@@ -278,7 +281,8 @@ export default function Dashboard() {
   // Refs to avoid stale closures inside interval callbacks
   const holdPositionRef = useRef<number | null>(null);
   const topSellersRef = useRef<TopSellersData | null>(null);
-  const topSellersExchangeRef = useRef<"bybit">("bybit");
+  const topSellersExchangeRef = useRef<"bybit" | "bitget">("bybit");
+  useEffect(() => { topSellersExchangeRef.current = topSellersExchange; }, [topSellersExchange]);
   const topSellersAmountRef = useRef<"150k" | "10m">("150k");
   const orderSidesRef = useRef<Set<"BUY" | "SELL">>(new Set(["BUY", "SELL"]));
   useEffect(() => { holdPositionRef.current = holdPosition; }, [holdPosition]);
@@ -289,15 +293,41 @@ export default function Dashboard() {
   async function fetchTopSellers() {
     setTopSellersLoading(true);
     try {
-      const g = (side: string, amt: number) =>
+      // Bybit via server
+      const gb = (side: string, amt: number) =>
         fetch(`${BASE}api/p2p/top-sellers?exchange=bybit&side=${side}&coin=USDT&currency=VND&amount=${amt}`)
           .then(r => r.json()).then(d => (d.top ?? []) as TopSeller[]).catch(() => [] as TopSeller[]);
-      const [bbBuy150k, bbSell150k, bbBuy10m, bbSell10m] = await Promise.all([
-        g("buy",150000), g("sell",150000), g("buy",10000000), g("sell",10000000),
+
+      // Bitget via CF Worker (client-side → VN IP → Bitget works)
+      const gBitget = async (tradeType: "1" | "2"): Promise<TopSeller[]> => {
+        if (!BITGET_WORKER_URL) return [];
+        try {
+          const r = await fetch(BITGET_WORKER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ coinName: "USDT", fiatCode: "VND", tradeType, pageNo: 1, pageSize: 10 }),
+          });
+          const d = await r.json();
+          const list: any[] = d?.data?.dataList ?? [];
+          return list.slice(0, 10).map((it: any, i: number) => ({
+            rank: i + 1,
+            nickname: it.nickName ?? it.merchantName ?? "—",
+            price: parseFloat(it.price ?? "0"),
+            minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
+            maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
+          }));
+        } catch { return []; }
+      };
+
+      const [bbBuy150k, bbSell150k, bbBuy10m, bbSell10m, bgBuy, bgSell] = await Promise.all([
+        gb("buy",150000), gb("sell",150000), gb("buy",10000000), gb("sell",10000000),
+        gBitget("2"), gBitget("1"),
       ]);
       const data: TopSellersData = {
-        bybit_150k_buy: bbBuy150k,  bybit_150k_sell: bbSell150k,
-        bybit_10m_buy:  bbBuy10m,   bybit_10m_sell:  bbSell10m,
+        bybit_150k_buy:  bbBuy150k,  bybit_150k_sell:  bbSell150k,
+        bybit_10m_buy:   bbBuy10m,   bybit_10m_sell:   bbSell10m,
+        bitget_150k_buy: bgBuy,      bitget_150k_sell: bgSell,
+        bitget_10m_buy:  bgBuy,      bitget_10m_sell:  bgSell,
       };
       setTopSellers(data);
       setTopSellersCountdown(15);
@@ -858,9 +888,19 @@ export default function Dashboard() {
                       <span className="text-[8px] text-muted-foreground">{topSellersCountdown}с</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase"
-                    style={{ borderColor: "rgba(255,214,0,0.4)", background: "rgba(255,214,0,0.10)", color: "#ffd600" }}>
-                    Bybit
+                  <div className="flex items-center gap-1">
+                    {(["bybit", "bitget"] as const).map(ex => (
+                      <button key={ex} onClick={() => setTopSellersExchange(ex)}
+                        className={`px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase transition-all ${
+                          topSellersExchange === ex
+                            ? ex === "bybit"
+                              ? "border-yellow-400/50 bg-yellow-400/15 text-yellow-300"
+                              : "border-[#00c68f]/50 bg-[#00c68f]/15 text-[#00c68f]"
+                            : "border-white/10 bg-white/4 text-muted-foreground hover:text-foreground"
+                        }`}>
+                        {ex === "bybit" ? "Bybit" : "Bitget"}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -910,8 +950,15 @@ export default function Dashboard() {
                     );
                   };
                   const renderEmpty = (_side: "buy" | "sell") => (
-                    <div className="flex flex-col items-center gap-0.5 py-3 px-1">
-                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет объявлений</span>
+                    <div className="flex flex-col items-center gap-1 py-3 px-1">
+                      {ex === "bitget" && !BITGET_WORKER_URL ? (
+                        <span className="text-[8px] text-yellow-400/70 text-center leading-tight">
+                          Нужен CF Worker<br/>
+                          <span className="text-muted-foreground/50">VITE_BITGET_PROXY_URL</span>
+                        </span>
+                      ) : (
+                        <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет объявлений</span>
+                      )}
                     </div>
                   );
                   const skeleton = (
