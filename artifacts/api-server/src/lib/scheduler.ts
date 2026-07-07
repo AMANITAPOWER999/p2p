@@ -3,6 +3,7 @@ import { getMexcC2COrdersWeb, mapMexcStatusToInternal, mapMexcTradeType, type Me
 import { getBybitP2POrders, getBybitPaidOrders, releaseBybitOrder, mapBybitStatus, mapBybitSide, type BybitP2POrder } from "./bybit";
 import { getOkxPaidOrders, releaseOkxOrder } from "./okx";
 import { getGatePaidOrders, releaseGateOrder } from "./gate";
+import { getBitgetPaidOrders, releaseBitgetOrder } from "./bitget";
 import { db, tradesTable, accountsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
@@ -270,6 +271,11 @@ async function releaseExchangeOrder(exchange: string, orderId: string): Promise<
       const k = process.env["GATE_API"]!;
       const s = process.env["GATE_API_KEY"]!;
       result = await releaseGateOrder(k, s, orderId);
+    } else if (exchange === "bitget") {
+      const k = process.env["BITGET_API_KEY"]!;
+      const s = process.env["BITGET_SECRET_KEY"]!;
+      const p = process.env["BITGET_PASSPHRASE"] ?? "";
+      result = await releaseBitgetOrder(k, s, p, orderId);
     } else {
       return false;
     }
@@ -315,6 +321,15 @@ export async function runAutoRelease(): Promise<void> {
     if (gateKey && gateSecret) {
       const paidOrders = await getGatePaidOrders(gateKey, gateSecret);
       for (const o of paidOrders) tasks.push({ exchange: "gate", orderId: o.id });
+    }
+
+    // Bitget
+    const bitgetKey = process.env["BITGET_API_KEY"];
+    const bitgetSecret = process.env["BITGET_SECRET_KEY"];
+    const bitgetPass = process.env["BITGET_PASSPHRASE"] ?? "";
+    if (bitgetKey && bitgetSecret) {
+      const paidOrders = await getBitgetPaidOrders(bitgetKey, bitgetSecret, bitgetPass);
+      for (const o of paidOrders) tasks.push({ exchange: "bitget", orderId: o.orderId });
     }
 
     logger.info({ paidCount: tasks.length }, "Auto-release: checked paid orders across exchanges");

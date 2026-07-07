@@ -12,7 +12,6 @@ const UNSUPPORTED_REASON: Record<string, string> = {
   gate:    "Нет API ключей",
   kucoin:  "Нет API ключей",
   htx:     "Нет API ключей",
-  bitget:  "Нет API ключей",
 };
 
 function getExchangeState(exchange: string) {
@@ -23,6 +22,15 @@ function getExchangeState(exchange: string) {
       releasedCount: autoReleaseState.releasedCount,
       lastCheckAt: autoReleaseState.lastCheckAt?.toISOString() ?? null,
       supported: !!(process.env["BYBIT_API_KEY"] && process.env["BYBIT_API_SECRET"]),
+    };
+  }
+  if (exchange === "bitget") {
+    return {
+      enabled: autoReleaseState.enabled,
+      running: autoReleaseState.running,
+      releasedCount: autoReleaseState.releasedCount,
+      lastCheckAt: autoReleaseState.lastCheckAt?.toISOString() ?? null,
+      supported: !!(process.env["BITGET_API_KEY"] && process.env["BITGET_SECRET_KEY"]),
     };
   }
   return {
@@ -45,7 +53,7 @@ router.get("/auto-release/status", (_req, res) => {
 
 router.post("/auto-release/:exchange/enable", (req, res) => {
   const exchange = req.params.exchange.toLowerCase();
-  if (exchange === "bybit") {
+  if (exchange === "bybit" || exchange === "bitget") {
     const delayMs = Number(req.body?.delayMs ?? 0);
     startAutoRelease(delayMs);
     return res.json({ success: true, enabled: true });
@@ -58,7 +66,7 @@ router.post("/auto-release/:exchange/enable", (req, res) => {
 
 router.post("/auto-release/:exchange/disable", (req, res) => {
   const exchange = req.params.exchange.toLowerCase();
-  if (exchange === "bybit") {
+  if (exchange === "bybit" || exchange === "bitget") {
     stopAutoRelease();
     return res.json({ success: true, enabled: false });
   }
