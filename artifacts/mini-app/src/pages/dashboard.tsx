@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRightLeft, ListOrdered, WalletCards, BarChart3, Zap, SlidersHorizontal, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
+import { ArrowRightLeft, ListOrdered, WalletCards, BarChart3, Zap, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import {
   useGetDashboardStats,
   useListTrades,
@@ -229,7 +229,6 @@ export default function Dashboard() {
   const USERS = ["Manunin A", "Sazykin V"];
 
   // Order panel state
-  const [orderMode, setOrderMode] = useState<null | "manual" | "auto">("manual");
   const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
   const [orderCoin, setOrderCoin] = useState("USDT");
   const [orderCurrency] = useState("VND");
@@ -268,6 +267,7 @@ export default function Dashboard() {
   const [topSellersAmount, setTopSellersAmount] = useState<"150k" | "10m">("150k");
   const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
   const [topSellersLoading, setTopSellersLoading] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<{ side: "buy" | "sell"; rank: number } | null>(null);
 
   async function fetchTopSellers() {
     setTopSellersLoading(true);
@@ -308,11 +308,6 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    if (orderMode !== "auto") {
-      if (autoRateTimerRef.current) clearInterval(autoRateTimerRef.current);
-      if (autoRateCountdownRef.current) clearInterval(autoRateCountdownRef.current);
-      return;
-    }
     fetchAutoRate();
     fetchTopSellers();
     autoRateTimerRef.current = setInterval(() => { fetchAutoRate(); fetchTopSellers(); }, 60_000);
@@ -323,7 +318,7 @@ export default function Dashboard() {
       if (autoRateTimerRef.current) clearInterval(autoRateTimerRef.current);
       if (autoRateCountdownRef.current) clearInterval(autoRateCountdownRef.current);
     };
-  }, [orderMode]);
+  }, []);
 
   async function fetchMarketPrice() {
     setMarketLoading(true);
@@ -643,34 +638,9 @@ export default function Dashboard() {
       {/* ── Подача ордера ── */}
       <SectionTitle id="order">Подача ордера</SectionTitle>
 
-      {/* Выбор режима */}
-      <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => { setOrderMode(orderMode === "manual" ? null : "manual"); setOrderResult(null); }}
-          className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border font-semibold text-sm transition-all ${
-            orderMode === "manual"
-              ? "bg-blue-500/20 text-blue-400 border-blue-500/40"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          style={orderMode !== "manual" ? { background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" } : {}}>
-          <SlidersHorizontal className="w-4 h-4" />
-          Ручной режим
-        </button>
-        <button onClick={() => { setOrderMode(orderMode === "auto" ? null : "auto"); setOrderResult(null); setMarketData(null); }}
-          className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border font-semibold text-sm transition-all ${
-            orderMode === "auto"
-              ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          style={orderMode !== "auto" ? { background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" } : {}}>
-          <Zap className="w-4 h-4" />
-          Авто курс
-        </button>
-      </div>
-
-      {/* Панель ордера */}
-      {orderMode && (
-        <div className="rounded-xl border p-3 space-y-3"
-          style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
+      {/* Панель ордера — Авто курс */}
+      <div className="rounded-xl border p-3 space-y-3"
+        style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.14)" }}>
 
           {/* Сторона + монета */}
           <div className="flex gap-2">
@@ -695,8 +665,7 @@ export default function Dashboard() {
           </div>
 
           {/* Авто курс: живой виджет с 1.2% спредом */}
-          {orderMode === "auto" && (
-            <div className="space-y-2">
+          <div className="space-y-2">
               {/* Статус / таймер */}
               <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                 <div className="flex items-center gap-1.5">
@@ -824,13 +793,31 @@ export default function Dashboard() {
                   const am = topSellersAmount;
                   const buyList  = topSellers ? topSellers[`${ex}_${am}_buy`  as keyof TopSellersData] ?? [] : [];
                   const sellList = topSellers ? topSellers[`${ex}_${am}_sell` as keyof TopSellersData] ?? [] : [];
-                  const renderRow = (s: TopSeller, i: number, side: "buy" | "sell") => (
-                    <div key={i} className="flex items-center gap-1 py-[2px]">
-                      <span className={`text-[8px] font-bold w-3 text-center shrink-0 ${i===0?"text-yellow-400":i===1?"text-slate-300":i===2?"text-orange-400":"text-muted-foreground"}`}>{i+1}</span>
-                      <span className="text-[9px] text-foreground/70 flex-1 truncate">{s.nickname}</span>
-                      <span className={`text-[10px] font-black shrink-0 ${side==="buy"?"text-green-300":"text-red-300"}`}>{s.price.toLocaleString("ru")}</span>
-                    </div>
-                  );
+                  const renderRow = (s: TopSeller, i: number, side: "buy" | "sell") => {
+                    const isSelected = selectedPosition?.side === side && selectedPosition?.rank === i;
+                    const targetPrice = side === "buy" ? s.price + 1 : s.price - 1;
+                    return (
+                      <button key={i}
+                        onClick={() => {
+                          setOrderSide(side === "buy" ? "BUY" : "SELL");
+                          setManualPrice(String(targetPrice));
+                          setSelectedPosition({ side, rank: i });
+                        }}
+                        className={`w-full flex items-center gap-1 py-[3px] px-1 rounded transition-all text-left ${
+                          isSelected
+                            ? side === "buy"
+                              ? "bg-green-500/20 ring-1 ring-green-400/40"
+                              : "bg-red-500/20 ring-1 ring-red-400/40"
+                            : "hover:bg-white/5"
+                        }`}>
+                        <span className={`text-[8px] font-bold w-3 text-center shrink-0 ${i===0?"text-yellow-400":i===1?"text-slate-300":i===2?"text-orange-400":"text-muted-foreground"}`}>{i+1}</span>
+                        <span className="text-[9px] text-foreground/70 flex-1 truncate">{s.nickname}</span>
+                        <span className={`text-[10px] font-black shrink-0 ${isSelected ? (side==="buy"?"text-green-300":"text-red-300") : (side==="buy"?"text-green-400/70":"text-red-400/70")}`}>
+                          {s.price.toLocaleString("ru")}
+                        </span>
+                      </button>
+                    );
+                  };
                   const renderEmpty = () => (
                     <div className="text-[9px] text-muted-foreground text-center py-2">—</div>
                   );
@@ -862,7 +849,6 @@ export default function Dashboard() {
                 })()}
               </div>
             </div>
-          )}
 
           {/* Цена и количество */}
           <div className="grid grid-cols-2 gap-2">
@@ -958,7 +944,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      )}
 
       <SectionTitle id="stats">Статистика</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
