@@ -1,0 +1,129 @@
+URL запроса
+https://www.bitget.com/v1/p2p/pub/adv/queryAdvList
+Метод запроса
+POST
+Код статуса
+200 OK
+Удаленный адрес
+104.18.9.145:443
+Правило для URL перехода
+unsafe-url
+access-control-allow-origin
+*
+cache-control
+no-cache, no-store, max-age=0, must-revalidate
+cf-cache-status
+DYNAMIC
+cf-ray
+a176d37eae5fa0f1-HKG
+content-encoding
+br
+content-type
+application/json
+date
+Tue, 07 Jul 2026 12:24:26 GMT
+expires
+0
+pragma
+no-cache
+requesttime
+1783427066714
+server
+cloudflare
+strict-transport-security
+max-age=15768000;includeSubDomains;preload
+vary
+Accept-Encoding
+vary
+Origin
+vary
+Access-Control-Request-Method
+vary
+Access-Control-Request-Headers
+x-content-type-options
+nosniff
+x-frame-options
+SAMEORIGIN
+x-protected-by
+OpenRASP
+x-request-id
+6b6de744208a47dd90ed4a6679051b25
+x-traceid
+42567-495396-201956
+x-xss-protection
+1; mode=block
+:authority
+www.bitget.com
+:method
+POST
+:path
+/v1/p2p/pub/adv/queryAdvList
+:scheme
+https
+accept
+application/json, text/plain, */*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7
+apptheme
+dark
+content-length
+218
+content-type
+application/json;charset=UTF-8
+cookie
+fingerprint-1783426739610-2468.39999999851-0.3108567710232172=true; terminalCode-1783426739611-2469.5-0.4030437801596771=true; _ga=GA1.1.272956991.1783426740; _dx_kvani5r=c7c217bada9dc8feef8debf115bbfee84d7d3ea2717e9b464fead652dccd703cec4305d5; dy_token=6a4ceeb7rcAM87WLMdlE8QT6SLCuCkvKAqxhtFR1; 4ef1398a95037d16=33RDJr5bfIDUDH0yG%2FJw4gPCm%2BnuMT6u5PlkmY9Q76GzxLXAE735NI2T04K4rrLgtXBCbAUauFCvX70hrpmyuDUECzBr2%2BV8wOgzhz%2FMsWuVAmoj%2FJqY5Fsv5eL22e7kw8lbWNRRDEe5wqJaqirK8cUfFZ2TRCg7uQM%2FmzyeSGA3fM%2FHwuv%2BfG73DpCoL0t3; _c_WBKFRo=nHirJTnDByLzE9UA8Y3FJPVAFRY9yLrBZpSeIMHe; _nb_ioWEgULi=; g_state={"i_l":0,"i_ll":1783426800712,"i_e":{"enable_itp_optimization":24},"i_et":1783426800712}; bt_rtoken=upex:session:id:bd1c2a3df7dd1c17ca701769368f6022f048af6bc74b33f2f6742254981342a1; bt_uid=B479430C356FA2E11C91A57A9E98CD30; bt_sessonid=d0ca3a50-3afb-413c-b907-f58ce1f0ae48; bt_newsessionid=eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhNTdhMzU5OS1hNWEwLTQ2NWUtOTUxMS1iMjFiM2ZjZGNhOGMzNTEwNzg0MjEiLCJ1aWQiOiJqb2NZVXA3d3JueFhUZ0tWRlRwWGxRPT0iLCJzdWIiOiJwb3cqKipvbSIsImlwIjoibGFRemlnMlYxUHZDMGltSDZHRS96UT09IiwiZGlkIjoiSmFFOTV6UmttQ0w5QmI3aXJ5Z1FTNUJMVFhiUEZsczJDakFoYVExbXNBQjEyUklzWlFLTTVIQmtTNHlUUmhuVyIsInN0cyI6MCwiaWF0IjoxNzgzNDI2ODc3LCJleHAiOjE3ODM4NTg4NzcsInB1c2hpZCI6ImRka1NMR1VDak9Sd1pFdU1rMFlaMWc9PSIsImlzcyI6InVwZXgifQ.VZGDrOtJguLHpSviz8B7qKiMIFMPvUQs-k5L-ERdtSI; _TDID_CK=1783426877048; bitget_lang=en; _ga_clientid=272956991.1783426740; _ga_sessionid=1783426739; BITGET_LOCAL_COOKIE={%22bitget_lang%22:%22en%22%2C%22bitget_unit%22:%22USD%22%2C%22bitget_showasset%22:true%2C%22bitget_theme%22:%22black%22%2C%22bitget_layout%22:%22right%22%2C%22bitget_valuationunit%22:0%2C%22bitget_valuationunit_new%22:1%2C%22bitget_valuationunitandfiat%22:1%2C%22bitgt_login%22:false%2C%22theme%22:%22black%22%2C%22USD%22:%22USD%22}; _cfuvid=aN9hZZLExBLeA.mkGHTJtnnEWEVjaqgEYW7WCkHyc9M-1783426881844-0.0.1.1-604800000; OptanonAlertBoxClosed=Tue%20Jul%2007%202026%2019:23:04%20GMT+0700%20(%D0%98%D0%BD%D0%B4%D0%BE%D0%BA%D0%B8%D1%82%D0%B0%D0%B9); OptanonConsent=isMarketing=1&isStatistic=1; theme=dark; __cf_bm=iFVO5YCWWPNlzMnnknPVWIVcR1NvbQkDZK2PnqbsK9M-1783426993.9833658-1.0.1.1-AxKrUD7su6aoiJGyIit1clq.KnHbUYaS.M14ZOla3YMkO0KpQDoYYve3D8fX7kV_EeUhciDSMrOsuNcldjg_se2jq7HoDGiAMaH1sbIX2dpHeObEFYsbEf5b.jkRMpkt; _ga_Z8Q93KHR0F=GS2.1.s1783426739$o1$g1$t1783426993$j57$l0$h0
+custom-token
+huZDKVNV814cf1k2b7qVaFQizcCchcOKkVqXdukViukNzuO1kuq4ADpsL
+deviceid
+f164b0f045441d5220cfd79ed2dfb371
+devicelanguage
+ru_RU
+dy-token
+6a4ceeb7rcAM87WLMdlE8QT6SLCuCkvKAqxhtFR1
+gaclientid
+272956991.1783426740
+gaid
+GA1.1.272956991.1783426740
+gasessionid
+1783426739
+language
+en_US
+locale
+en_US
+origin
+https://www.bitget.com
+priority
+u=1, i
+referer
+https://www.bitget.com/p2p-trade?paymethodIds=-1&fiatName=USD
+sec-ch-ua
+"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Chrome OS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+securitynew
+true
+terminalcode
+b4413d639fc07ab902b03fd48c214fef
+terminaltype
+1
+timezone
+GMT+07:00
+tm
+1783427066216
+uhti
+w1783427065836ef1f4d28a14
+usenewpwdversion
+true
+user-agent
+Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
+webtype
