@@ -733,94 +733,6 @@ export default function Dashboard() {
             </select>
           </div>
 
-          {/* Авто курс: живой виджет с 1.2% спредом */}
-          <div className="space-y-2">
-              {/* Статус / таймер */}
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  {autoRateLoading
-                    ? <><Loader2 className="w-3 h-3 animate-spin text-yellow-400" /><span className="text-yellow-400">Обновление…</span></>
-                    : <><Zap className="w-3 h-3 text-yellow-400" /><span>Bybit P2P</span></>}
-                </div>
-                {!autoRateLoading && (
-                  <div className="flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                    <span>обновление через {autoRateCountdown}с</span>
-                  </div>
-                )}
-              </div>
-
-              {autoRateError && (
-                <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 flex items-center justify-between">
-                  <span>⚠️ {autoRateError}</span>
-                  <button onClick={fetchAutoRate} className="text-red-300 underline ml-2">Повтор</button>
-                </div>
-              )}
-
-              {autoRate && (
-                <div className="space-y-2">
-                  {/* Основные цены — покупка и продажа */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => { setOrderSides(new Set(["BUY"])); setManualPrice(String(autoRate.ourBuy)); }}
-                      className="rounded-xl border p-3 text-left transition-all hover:brightness-110 active:scale-95"
-                      style={{ background: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)" }}>
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-green-400 mb-1 flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3" /> Покупка
-                      </div>
-                      <div className="text-lg font-black text-green-300 leading-none">
-                        {autoRate.ourBuy.toLocaleString("ru")}
-                      </div>
-                      <div className="text-[10px] text-green-400/60 mt-0.5">₫ / USDT</div>
-                    </button>
-                    <button
-                      onClick={() => { setOrderSides(new Set(["SELL"])); setManualPrice(String(autoRate.ourSell)); }}
-                      className="rounded-xl border p-3 text-left transition-all hover:brightness-110 active:scale-95"
-                      style={{ background: "rgba(239,68,68,0.10)", borderColor: "rgba(239,68,68,0.35)" }}>
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1 flex items-center gap-1">
-                        <TrendingDown className="w-3 h-3" /> Продажа
-                      </div>
-                      <div className="text-lg font-black text-red-300 leading-none">
-                        {autoRate.ourSell.toLocaleString("ru")}
-                      </div>
-                      <div className="text-[10px] text-red-400/60 mt-0.5">₫ / USDT</div>
-                    </button>
-                  </div>
-
-                  {/* Рыночные данные (мелко) */}
-                  <div className="rounded-lg border px-3 py-2 space-y-1"
-                    style={{ background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.08)" }}>
-                    <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Рынок Bybit (топ-5 ср.)</div>
-                    <div className="grid grid-cols-3 gap-1 text-center">
-                      <div>
-                        <div className="text-[9px] text-muted-foreground">Покупка рынок</div>
-                        <div className="text-[11px] font-bold text-green-400">{autoRate.market.avgBuy.toLocaleString("ru")}</div>
-                      </div>
-                      <div>
-                        <div className="text-[9px] text-muted-foreground">Mid</div>
-                        <div className="text-[11px] font-bold text-yellow-300">{autoRate.market.mid.toLocaleString("ru")}</div>
-                      </div>
-                      <div>
-                        <div className="text-[9px] text-muted-foreground">Продажа рынок</div>
-                        <div className="text-[11px] font-bold text-red-400">{autoRate.market.avgSell.toLocaleString("ru")}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-[9px] text-muted-foreground text-center">
-                    Нажмите на цену — она подставится в поле ниже
-                  </div>
-                </div>
-              )}
-
-              {/* Скелетон при первой загрузке */}
-              {!autoRate && autoRateLoading && (
-                <div className="grid grid-cols-2 gap-2 animate-pulse">
-                  <div className="rounded-xl h-20 bg-white/5 border border-white/10" />
-                  <div className="rounded-xl h-20 bg-white/5 border border-white/10" />
-                </div>
-              )}
-
               {/* ── ТОП-1…5 кнопки удержания позиции ── */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -978,7 +890,6 @@ export default function Dashboard() {
                   );
                 })()}
               </div>
-            </div>
 
           {/* Цена и количество */}
           <div className="grid grid-cols-2 gap-2">
@@ -1168,7 +1079,7 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
+      </div>
 
       <SectionTitle id="stats">Статистика</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
