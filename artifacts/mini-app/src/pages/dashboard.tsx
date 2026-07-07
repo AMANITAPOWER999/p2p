@@ -237,6 +237,7 @@ export default function Dashboard() {
   const [orderCurrency] = useState("VND");
   const [manualPrice, setManualPrice] = useState("");
   const [manualAmount, setManualAmount] = useState("");
+  const [topPickerRank, setTopPickerRank] = useState<number | null>(null);
   const [marketData, setMarketData] = useState<{
     top3: Array<{ nickname: string; price: number; minAmount: number; maxAmount: number }>;
     avg: number;
@@ -755,6 +756,7 @@ export default function Dashboard() {
                           const next = holdPosition === n ? null : n;
                           setHoldPosition(next);
                           holdPositionRef.current = next;
+                          setTopPickerRank(prev => prev === n ? null : n);
                           // Always apply price on click (use ref to avoid stale closure)
                           const data = topSellersRef.current;
                           if (data) {
@@ -784,6 +786,52 @@ export default function Dashboard() {
                     );
                   })}
                 </div>
+
+                {/* Попап выбора цены */}
+                {topPickerRank !== null && (() => {
+                  const ex = topSellersExchange;
+                  const am = topSellersAmount;
+                  const buyList = topSellers ? (topSellers[`${ex}_${am}_buy` as keyof TopSellersData] ?? []) : [];
+                  const sellList = topSellers ? (topSellers[`${ex}_${am}_sell` as keyof TopSellersData] ?? []) : [];
+                  const idx = topPickerRank - 1;
+                  const buyPrice = buyList.length > idx ? buyList[idx].price + 1 : null;
+                  const sellPrice = sellList.length > idx ? sellList[idx].price - 1 : null;
+                  return (
+                    <div className="rounded-xl border p-3 space-y-2"
+                      style={{ background: "rgba(20,25,40,0.97)", borderColor: "rgba(255,255,255,0.13)" }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-white uppercase tracking-wide">
+                          ТОП-{topPickerRank} · Цена размещения
+                        </span>
+                        <button onClick={() => setTopPickerRank(null)}
+                          className="text-[10px] text-muted-foreground hover:text-white transition-colors px-1">✕</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          disabled={buyPrice === null}
+                          onClick={() => { if (buyPrice !== null) { setManualPrice(String(buyPrice)); setTopPickerRank(null); } }}
+                          className="flex flex-col items-center gap-0.5 py-2.5 rounded-lg border border-green-400/30 bg-green-500/10 hover:bg-green-500/20 active:scale-95 transition-all disabled:opacity-30">
+                          <span className="text-[8px] font-semibold uppercase tracking-widest text-green-400">Покупка</span>
+                          <span className="text-[13px] font-black text-green-300 tabular-nums">
+                            {buyPrice !== null ? buyPrice.toLocaleString("ru") : "—"}
+                          </span>
+                          <span className="text-[8px] text-green-400/60">₫</span>
+                        </button>
+                        <button
+                          disabled={sellPrice === null}
+                          onClick={() => { if (sellPrice !== null) { setManualPrice(String(sellPrice)); setTopPickerRank(null); } }}
+                          className="flex flex-col items-center gap-0.5 py-2.5 rounded-lg border border-red-400/30 bg-red-500/10 hover:bg-red-500/20 active:scale-95 transition-all disabled:opacity-30">
+                          <span className="text-[8px] font-semibold uppercase tracking-widest text-red-400">Продажа</span>
+                          <span className="text-[13px] font-black text-red-300 tabular-nums">
+                            {sellPrice !== null ? sellPrice.toLocaleString("ru") : "—"}
+                          </span>
+                          <span className="text-[8px] text-red-400/60">₫</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {holdPosition !== null && (
                   <div className="flex items-center gap-1.5 text-[9px] text-yellow-300 bg-yellow-400/8 border border-yellow-400/20 rounded-lg px-2.5 py-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping shrink-0" />
