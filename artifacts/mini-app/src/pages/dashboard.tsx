@@ -287,18 +287,45 @@ export default function Dashboard() {
   useEffect(() => { topSellersAmountRef.current = topSellersAmount; }, [topSellersAmount]);
   useEffect(() => { orderSidesRef.current = orderSides; }, [orderSides]);
 
+  async function fetchBitgetP2PDirect(tradeType: "1" | "2"): Promise<Array<{rank:number;nickname:string;price:number;minAmount:number;maxAmount:number}>> {
+    try {
+      const r = await fetch("https://www.bitget.com/v1/p2p/pub/adv/queryAdvList", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json, text/plain, */*",
+          "Content-Type": "application/json;charset=UTF-8",
+          "Referer": "https://www.bitget.com/p2p-trade",
+          "origin": "https://www.bitget.com",
+          "locale": "en_US",
+          "language": "en_US",
+          "terminaltype": "1",
+        },
+        body: JSON.stringify({ coinName: "USDT", fiatCode: "VND", tradeType, pageNo: 1, pageSize: 20 }),
+      });
+      const d = await r.json();
+      const list: any[] = d?.data?.dataList ?? [];
+      return list.map((it: any, i: number) => ({
+        rank: i + 1,
+        nickname: it.nickName ?? it.merchantName ?? "—",
+        price: parseFloat(it.price ?? "0"),
+        minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
+        maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
+      }));
+    } catch { return []; }
+  }
+
   async function fetchTopSellers() {
     setTopSellersLoading(true);
     try {
-      const q = (ex: string, side: string, amt: number) =>
-        fetch(`${BASE}api/p2p/top-sellers?exchange=${ex}&side=${side}&amount=${amt}`).then(r => r.json()).catch(() => ({ top: [] }));
-      const [bg150b, bg150s, bg10b, bg10s] = await Promise.all([
-        q("bitget","buy",150000),  q("bitget","sell",150000),
-        q("bitget","buy",10000000),q("bitget","sell",10000000),
+      // Fetch directly from Bitget browser API (bypasses server geo-restriction, CORS: *)
+      // tradeType "1" = sell side (merchants selling USDT), "2" = buy side (merchants buying USDT)
+      const [sellList, buyList] = await Promise.all([
+        fetchBitgetP2PDirect("1"),
+        fetchBitgetP2PDirect("2"),
       ]);
       const data: TopSellersData = {
-        bitget_150k_buy: bg150b.top ?? [],  bitget_150k_sell: bg150s.top ?? [],
-        bitget_10m_buy: bg10b.top ?? [],    bitget_10m_sell: bg10s.top ?? [],
+        bitget_150k_buy: buyList,   bitget_150k_sell: sellList,
+        bitget_10m_buy:  buyList,   bitget_10m_sell:  sellList,
       };
       setTopSellers(data);
       setTopSellersCountdown(15);
@@ -912,7 +939,7 @@ export default function Dashboard() {
                   };
                   const renderEmpty = () => (
                     <div className="flex flex-col items-center gap-0.5 py-3 px-1">
-                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Рыночные данные Bitget P2P недоступны через API</span>
+                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет активных объявлений Bitget P2P</span>
                     </div>
                   );
                   const skeleton = (

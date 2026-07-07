@@ -22,7 +22,7 @@ export const HealthCheckResponse = zod.object({
 export const ListAccountsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "exchange": zod.enum(['mexc', 'bybit']),
+  "exchange": zod.enum(['mexc', 'bybit', 'bitget']),
   "ownerName": zod.string(),
   "bankName": zod.string(),
   "bankUrl": zod.string().nullish(),
@@ -43,7 +43,7 @@ export const ListAccountsResponse = zod.array(ListAccountsResponseItem)
  */
 export const CreateAccountBody = zod.object({
   "name": zod.string(),
-  "exchange": zod.enum(['mexc', 'bybit']),
+  "exchange": zod.enum(['mexc', 'bybit', 'bitget']),
   "ownerName": zod.string(),
   "bankName": zod.string(),
   "bankUrl": zod.string().optional(),
@@ -62,7 +62,7 @@ export const GetAccountParams = zod.object({
 export const GetAccountResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "exchange": zod.enum(['mexc', 'bybit']),
+  "exchange": zod.enum(['mexc', 'bybit', 'bitget']),
   "ownerName": zod.string(),
   "bankName": zod.string(),
   "bankUrl": zod.string().nullish(),
@@ -96,7 +96,7 @@ export const UpdateAccountBody = zod.object({
 export const UpdateAccountResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "exchange": zod.enum(['mexc', 'bybit']),
+  "exchange": zod.enum(['mexc', 'bybit', 'bitget']),
   "ownerName": zod.string(),
   "bankName": zod.string(),
   "bankUrl": zod.string().nullish(),

@@ -1,0 +1,1 @@
+- [Bitget P2P market API](bitget-p2p-market-api.md) — pub/adv/queryAdvList POST, CORS:*, geo-blocked server-side → must call from browser client-side
