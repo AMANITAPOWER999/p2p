@@ -740,7 +740,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-1.5">
                   {autoRateLoading
                     ? <><Loader2 className="w-3 h-3 animate-spin text-yellow-400" /><span className="text-yellow-400">Обновление…</span></>
-                    : <><Zap className="w-3 h-3 text-yellow-400" /><span>Bybit P2P · спред 1.2%</span></>}
+                    : <><Zap className="w-3 h-3 text-yellow-400" /><span>Bybit P2P</span></>}
                 </div>
                 {!autoRateLoading && (
                   <div className="flex items-center gap-1">
