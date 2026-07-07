@@ -993,9 +993,28 @@ export default function Dashboard() {
             </div>
           )}
 
-          {enabledExchanges.size === 0 && (
+          {/* Целевые биржи */}
+          {enabledExchanges.size === 0 ? (
             <div className="text-[11px] text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
               ⚠️ Нет выбранных бирж — включите хотя бы одну галочкой выше
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Ордер будет подан на:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {[...enabledExchanges].map(ex => (
+                  <div key={ex} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                    style={{
+                      background: EXCHANGE_BRAND[ex.toLowerCase()]?.bg ?? "rgba(255,255,255,0.1)",
+                      color: EXCHANGE_BRAND[ex.toLowerCase()]?.color ?? "#fff",
+                      borderColor: EXCHANGE_BRAND[ex.toLowerCase()]?.border ?? "rgba(255,255,255,0.2)",
+                    }}>
+                    <img src={EXCHANGE_ICON[ex.toLowerCase()]} alt="" className="w-3 h-3 rounded-sm"
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    {ex}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
