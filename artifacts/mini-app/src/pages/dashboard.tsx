@@ -262,12 +262,10 @@ export default function Dashboard() {
   // ── Топ-5 по бирже, стороне и сумме ──
   type TopSeller = { rank: number; nickname: string; price: number; minAmount: number; maxAmount: number };
   type TopSellersData = {
-    bitget_150k_buy: TopSeller[]; bitget_150k_sell: TopSeller[];
-    bitget_10m_buy: TopSeller[];  bitget_10m_sell: TopSeller[];
     bybit_150k_buy: TopSeller[];  bybit_150k_sell: TopSeller[];
     bybit_10m_buy: TopSeller[];   bybit_10m_sell: TopSeller[];
   };
-  const [topSellersExchange, setTopSellersExchange] = useState<"bitget" | "bybit">("bitget");
+  const topSellersExchange = "bybit" as const;
   const [topSellersAmount, setTopSellersAmount] = useState<"150k" | "10m">("150k");
   const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
   const [topSellersLoading, setTopSellersLoading] = useState(false);
@@ -280,33 +278,26 @@ export default function Dashboard() {
   // Refs to avoid stale closures inside interval callbacks
   const holdPositionRef = useRef<number | null>(null);
   const topSellersRef = useRef<TopSellersData | null>(null);
-  const topSellersExchangeRef = useRef<"bitget" | "bybit">("bitget");
+  const topSellersExchangeRef = useRef<"bybit">("bybit");
   const topSellersAmountRef = useRef<"150k" | "10m">("150k");
   const orderSidesRef = useRef<Set<"BUY" | "SELL">>(new Set(["BUY", "SELL"]));
   useEffect(() => { holdPositionRef.current = holdPosition; }, [holdPosition]);
   useEffect(() => { topSellersRef.current = topSellers; }, [topSellers]);
-  useEffect(() => { topSellersExchangeRef.current = topSellersExchange; }, [topSellersExchange]);
   useEffect(() => { topSellersAmountRef.current = topSellersAmount; }, [topSellersAmount]);
   useEffect(() => { orderSidesRef.current = orderSides; }, [orderSides]);
 
   async function fetchTopSellers() {
     setTopSellersLoading(true);
     try {
-      const g = (ex: string, side: string, amt: number) =>
-        fetch(`${BASE}api/p2p/top-sellers?exchange=${ex}&side=${side}&coin=USDT&currency=VND&amount=${amt}`)
+      const g = (side: string, amt: number) =>
+        fetch(`${BASE}api/p2p/top-sellers?exchange=bybit&side=${side}&coin=USDT&currency=VND&amount=${amt}`)
           .then(r => r.json()).then(d => (d.top ?? []) as TopSeller[]).catch(() => [] as TopSeller[]);
-      const [
-        bgBuy150k, bgSell150k, bgBuy10m, bgSell10m,
-        bbBuy150k, bbSell150k, bbBuy10m, bbSell10m,
-      ] = await Promise.all([
-        g("bitget","buy",150000), g("bitget","sell",150000), g("bitget","buy",10000000), g("bitget","sell",10000000),
-        g("bybit","buy",150000),  g("bybit","sell",150000),  g("bybit","buy",10000000),  g("bybit","sell",10000000),
+      const [bbBuy150k, bbSell150k, bbBuy10m, bbSell10m] = await Promise.all([
+        g("buy",150000), g("sell",150000), g("buy",10000000), g("sell",10000000),
       ]);
       const data: TopSellersData = {
-        bitget_150k_buy: bgBuy150k,  bitget_150k_sell: bgSell150k,
-        bitget_10m_buy:  bgBuy10m,   bitget_10m_sell:  bgSell10m,
-        bybit_150k_buy:  bbBuy150k,  bybit_150k_sell:  bbSell150k,
-        bybit_10m_buy:   bbBuy10m,   bybit_10m_sell:   bbSell10m,
+        bybit_150k_buy: bbBuy150k,  bybit_150k_sell: bbSell150k,
+        bybit_10m_buy:  bbBuy10m,   bybit_10m_sell:  bbSell10m,
       };
       setTopSellers(data);
       setTopSellersCountdown(15);
@@ -867,19 +858,9 @@ export default function Dashboard() {
                       <span className="text-[8px] text-muted-foreground">{topSellersCountdown}с</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {(["bitget", "bybit"] as const).map(ex => (
-                      <button key={ex} onClick={() => setTopSellersExchange(ex)}
-                        className={`px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase transition-all ${
-                          topSellersExchange === ex
-                            ? ex === "bitget"
-                              ? "border-[#00c68f]/50 bg-[#00c68f]/15 text-[#00c68f]"
-                              : "border-yellow-400/50 bg-yellow-400/15 text-yellow-300"
-                            : "border-white/10 bg-white/4 text-muted-foreground hover:text-foreground"
-                        }`}>
-                        {ex === "bitget" ? "Bitget" : "Bybit"}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase"
+                    style={{ borderColor: "rgba(255,214,0,0.4)", background: "rgba(255,214,0,0.10)", color: "#ffd600" }}>
+                    Bybit
                   </div>
                 </div>
 
@@ -928,15 +909,9 @@ export default function Dashboard() {
                       </button>
                     );
                   };
-                  const renderEmpty = (side: "buy" | "sell") => (
-                    <div className="flex flex-col items-center gap-1 py-3 px-1">
-                      {ex === "bitget" ? (
-                        <span className="text-[8px] text-yellow-400/60 text-center leading-tight">
-                          Bitget P2P недоступен<br/>с сервера (US IP)
-                        </span>
-                      ) : (
-                        <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет объявлений</span>
-                      )}
+                  const renderEmpty = (_side: "buy" | "sell") => (
+                    <div className="flex flex-col items-center gap-0.5 py-3 px-1">
+                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет объявлений</span>
                     </div>
                   );
                   const skeleton = (
