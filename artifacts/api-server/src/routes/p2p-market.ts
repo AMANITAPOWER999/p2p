@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createHmac } from "crypto";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -116,6 +117,51 @@ async function fetchOkxTop(coin: string, currency: string, side: "buy" | "sell",
   } catch { return []; }
 }
 
+async function fetchBitgetTop(coin: string, currency: string, side: "buy" | "sell", _amount: number) {
+  const apiKey    = process.env["BITGET_API_KEY"]    ?? "";
+  const secret    = process.env["BITGET_SECRET_KEY"] ?? "";
+  const passphrase = process.env["BITGET_PASSPHRASE"] ?? "";
+  if (!apiKey || !secret) return [];
+
+  // tradeType: "buy" means buyers posting (you sell to them); "sell" = sellers posting (you buy from them)
+  const tradeType = side === "buy" ? "buy" : "sell";
+  const path = `/api/v2/p2p/advList?coin=${coin}&fiatCurrency=${currency}&tradeType=${tradeType}&page=1&pageSize=10`;
+  const ts   = Date.now().toString();
+  const sign = createHmac("sha256", secret).update(ts + "GET" + path).digest("base64");
+
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    const resp = await fetch("https://api.bitget.com" + path, {
+      headers: {
+        "ACCESS-KEY": apiKey,
+        "ACCESS-SIGN": sign,
+        "ACCESS-TIMESTAMP": ts,
+        "ACCESS-PASSPHRASE": passphrase,
+        "ACCESS-VERSION": "2",
+        "Content-Type": "application/json",
+      },
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    const json: any = await resp.json();
+    if (json.code !== "00000") {
+      logger.warn({ code: json.code, msg: json.msg }, "Bitget P2P advList non-success");
+      return [];
+    }
+    const items: any[] = json?.data?.items ?? json?.data ?? [];
+    return items.slice(0, 5).map((it: any, i: number) => ({
+      rank: i + 1,
+      nickname: it.nickName ?? it.merchantName ?? String(it.merchantId ?? "").slice(0, 8),
+      price: parseFloat(it.price),
+      minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
+      maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 router.get("/p2p/top-sellers", async (req, res) => {
   const exchange = ((req.query.exchange as string) ?? "bybit").toLowerCase();
   const side     = ((req.query.side as string) ?? "sell").toLowerCase() as "buy" | "sell";
@@ -123,9 +169,14 @@ router.get("/p2p/top-sellers", async (req, res) => {
   const currency = (req.query.currency as string) ?? "VND";
   const amount   = parseFloat((req.query.amount as string) ?? "0");
   try {
-    const top = exchange === "okx"
-      ? await fetchOkxTop(coin, currency, side, amount)
-      : await fetchBybitTop(coin, currency, side, amount);
+    let top: any[];
+    if (exchange === "okx") {
+      top = await fetchOkxTop(coin, currency, side, amount);
+    } else if (exchange === "bitget") {
+      top = await fetchBitgetTop(coin, currency, side, amount);
+    } else {
+      top = await fetchBybitTop(coin, currency, side, amount);
+    }
     return res.json({ exchange, side, coin, currency, amount, top });
   } catch (e: any) {
     logger.error({ err: e }, "p2p top-sellers error");

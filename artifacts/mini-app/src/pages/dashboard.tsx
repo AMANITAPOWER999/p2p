@@ -262,12 +262,14 @@ export default function Dashboard() {
   // ── Топ-5 по бирже, стороне и сумме ──
   type TopSeller = { rank: number; nickname: string; price: number; minAmount: number; maxAmount: number };
   type TopSellersData = {
-    bybit_150k_buy: TopSeller[]; bybit_150k_sell: TopSeller[];
-    bybit_10m_buy: TopSeller[];  bybit_10m_sell: TopSeller[];
-    okx_150k_buy: TopSeller[];   okx_150k_sell: TopSeller[];
-    okx_10m_buy: TopSeller[];    okx_10m_sell: TopSeller[];
+    bitget_150k_buy: TopSeller[]; bitget_150k_sell: TopSeller[];
+    bitget_10m_buy: TopSeller[];  bitget_10m_sell: TopSeller[];
+    bybit_150k_buy: TopSeller[];  bybit_150k_sell: TopSeller[];
+    bybit_10m_buy: TopSeller[];   bybit_10m_sell: TopSeller[];
+    okx_150k_buy: TopSeller[];    okx_150k_sell: TopSeller[];
+    okx_10m_buy: TopSeller[];     okx_10m_sell: TopSeller[];
   };
-  const [topSellersExchange, setTopSellersExchange] = useState<"bybit" | "okx">("bybit");
+  const [topSellersExchange, setTopSellersExchange] = useState<"bitget" | "bybit" | "okx">("bitget");
   const [topSellersAmount, setTopSellersAmount] = useState<"150k" | "10m">("150k");
   const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
   const [topSellersLoading, setTopSellersLoading] = useState(false);
@@ -280,7 +282,7 @@ export default function Dashboard() {
   // Refs to avoid stale closures inside interval callbacks
   const holdPositionRef = useRef<number | null>(null);
   const topSellersRef = useRef<TopSellersData | null>(null);
-  const topSellersExchangeRef = useRef<"bybit" | "okx">("bybit");
+  const topSellersExchangeRef = useRef<"bitget" | "bybit" | "okx">("bitget");
   const topSellersAmountRef = useRef<"150k" | "10m">("150k");
   const orderSidesRef = useRef<Set<"BUY" | "SELL">>(new Set(["BUY", "SELL"]));
   useEffect(() => { holdPositionRef.current = holdPosition; }, [holdPosition]);
@@ -294,17 +296,23 @@ export default function Dashboard() {
     try {
       const q = (ex: string, side: string, amt: number) =>
         fetch(`${BASE}api/p2p/top-sellers?exchange=${ex}&side=${side}&amount=${amt}`).then(r => r.json()).catch(() => ({ top: [] }));
-      const [bb150, bs150, bb10m, bs10m, ob150, os150, ob10m, os10m] = await Promise.all([
-        q("bybit","buy",150000), q("bybit","sell",150000),
+      const [bg150b, bg150s, bg10b, bg10s,
+             bb150, bs150, bb10m, bs10m,
+             ob150, os150, ob10m, os10m] = await Promise.all([
+        q("bitget","buy",150000),  q("bitget","sell",150000),
+        q("bitget","buy",10000000),q("bitget","sell",10000000),
+        q("bybit","buy",150000),   q("bybit","sell",150000),
         q("bybit","buy",10000000), q("bybit","sell",10000000),
-        q("okx","buy",150000), q("okx","sell",150000),
-        q("okx","buy",10000000), q("okx","sell",10000000),
+        q("okx","buy",150000),     q("okx","sell",150000),
+        q("okx","buy",10000000),   q("okx","sell",10000000),
       ]);
       const data: TopSellersData = {
-        bybit_150k_buy: bb150.top ?? [], bybit_150k_sell: bs150.top ?? [],
-        bybit_10m_buy: bb10m.top ?? [],  bybit_10m_sell: bs10m.top ?? [],
-        okx_150k_buy: ob150.top ?? [],   okx_150k_sell: os150.top ?? [],
-        okx_10m_buy: ob10m.top ?? [],    okx_10m_sell: os10m.top ?? [],
+        bitget_150k_buy: bg150b.top ?? [],  bitget_150k_sell: bg150s.top ?? [],
+        bitget_10m_buy: bg10b.top ?? [],    bitget_10m_sell: bg10s.top ?? [],
+        bybit_150k_buy: bb150.top ?? [],    bybit_150k_sell: bs150.top ?? [],
+        bybit_10m_buy: bb10m.top ?? [],     bybit_10m_sell: bs10m.top ?? [],
+        okx_150k_buy: ob150.top ?? [],      okx_150k_sell: os150.top ?? [],
+        okx_10m_buy: ob10m.top ?? [],       okx_10m_sell: os10m.top ?? [],
       };
       setTopSellers(data);
       setTopSellersCountdown(15);
@@ -856,14 +864,14 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex rounded-md overflow-hidden border" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
-                    {(["bybit", "okx"] as const).map(ex => (
+                    {(["bitget", "bybit", "okx"] as const).map(ex => (
                       <button key={ex} onClick={() => setTopSellersExchange(ex)}
                         className={`px-2.5 py-0.5 text-[9px] font-bold uppercase transition-all ${
                           topSellersExchange === ex
                             ? "bg-yellow-400/20 text-yellow-300"
                             : "text-muted-foreground hover:text-foreground"
                         }`}>
-                        {ex === "bybit" ? "Bybit" : "OKX"}
+                        {ex === "bitget" ? "Bitget" : ex === "bybit" ? "Bybit" : "OKX"}
                       </button>
                     ))}
                   </div>
