@@ -15,7 +15,7 @@ import {
 const BASE = import.meta.env.BASE_URL ?? "/";
 
 const BANKS = ["Vietcombank", "Vietinbank", "BIDV"];
-const EXCHANGES = ["OKX", "Bybit", "Binance", "Gate", "Kucoin", "Mexc", "HTX", "Bitget"];
+const EXCHANGES = ["Bitget"];
 
 const STATUS_COLOR: Record<string, string> = {
   pending:   "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
@@ -146,7 +146,7 @@ export default function Dashboard() {
   const [activeUser, setActiveUser] = useState<string | null>("Manunin A");
   const [activeBank, setActiveBank] = useState<string | null>("Vietcombank");
   const [activeExchange, setActiveExchange] = useState<string | null>(null);
-  const [enabledExchanges, setEnabledExchanges] = useState<Set<string>>(new Set(["OKX", "Bybit"]));
+  const [enabledExchanges, setEnabledExchanges] = useState<Set<string>>(new Set(["Bitget"]));
   function toggleExchangeEnabled(ex: string) {
     setEnabledExchanges(prev => {
       const next = new Set(prev);
@@ -264,12 +264,8 @@ export default function Dashboard() {
   type TopSellersData = {
     bitget_150k_buy: TopSeller[]; bitget_150k_sell: TopSeller[];
     bitget_10m_buy: TopSeller[];  bitget_10m_sell: TopSeller[];
-    bybit_150k_buy: TopSeller[];  bybit_150k_sell: TopSeller[];
-    bybit_10m_buy: TopSeller[];   bybit_10m_sell: TopSeller[];
-    okx_150k_buy: TopSeller[];    okx_150k_sell: TopSeller[];
-    okx_10m_buy: TopSeller[];     okx_10m_sell: TopSeller[];
   };
-  const [topSellersExchange, setTopSellersExchange] = useState<"bitget" | "bybit" | "okx">("bitget");
+  const [topSellersExchange, setTopSellersExchange] = useState<"bitget">("bitget");
   const [topSellersAmount, setTopSellersAmount] = useState<"150k" | "10m">("150k");
   const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
   const [topSellersLoading, setTopSellersLoading] = useState(false);
@@ -282,7 +278,7 @@ export default function Dashboard() {
   // Refs to avoid stale closures inside interval callbacks
   const holdPositionRef = useRef<number | null>(null);
   const topSellersRef = useRef<TopSellersData | null>(null);
-  const topSellersExchangeRef = useRef<"bitget" | "bybit" | "okx">("bitget");
+  const topSellersExchangeRef = useRef<"bitget">("bitget");
   const topSellersAmountRef = useRef<"150k" | "10m">("150k");
   const orderSidesRef = useRef<Set<"BUY" | "SELL">>(new Set(["BUY", "SELL"]));
   useEffect(() => { holdPositionRef.current = holdPosition; }, [holdPosition]);
@@ -296,23 +292,13 @@ export default function Dashboard() {
     try {
       const q = (ex: string, side: string, amt: number) =>
         fetch(`${BASE}api/p2p/top-sellers?exchange=${ex}&side=${side}&amount=${amt}`).then(r => r.json()).catch(() => ({ top: [] }));
-      const [bg150b, bg150s, bg10b, bg10s,
-             bb150, bs150, bb10m, bs10m,
-             ob150, os150, ob10m, os10m] = await Promise.all([
+      const [bg150b, bg150s, bg10b, bg10s] = await Promise.all([
         q("bitget","buy",150000),  q("bitget","sell",150000),
         q("bitget","buy",10000000),q("bitget","sell",10000000),
-        q("bybit","buy",150000),   q("bybit","sell",150000),
-        q("bybit","buy",10000000), q("bybit","sell",10000000),
-        q("okx","buy",150000),     q("okx","sell",150000),
-        q("okx","buy",10000000),   q("okx","sell",10000000),
       ]);
       const data: TopSellersData = {
         bitget_150k_buy: bg150b.top ?? [],  bitget_150k_sell: bg150s.top ?? [],
         bitget_10m_buy: bg10b.top ?? [],    bitget_10m_sell: bg10s.top ?? [],
-        bybit_150k_buy: bb150.top ?? [],    bybit_150k_sell: bs150.top ?? [],
-        bybit_10m_buy: bb10m.top ?? [],     bybit_10m_sell: bs10m.top ?? [],
-        okx_150k_buy: ob150.top ?? [],      okx_150k_sell: os150.top ?? [],
-        okx_10m_buy: ob10m.top ?? [],       okx_10m_sell: os10m.top ?? [],
       };
       setTopSellers(data);
       setTopSellersCountdown(15);
@@ -384,7 +370,7 @@ export default function Dashboard() {
     setMarketData(null);
     try {
       const side = orderSides.has("BUY") ? "BUY" : "SELL";
-      const r = await fetch(`${BASE}api/p2p/market-price?exchange=bybit&side=${side}&coin=${orderCoin}&currency=${orderCurrency}`);
+      const r = await fetch(`${BASE}api/p2p/market-price?exchange=bitget&side=${side}&coin=${orderCoin}&currency=${orderCurrency}`);
       const json = await r.json();
       if (json.error) throw new Error(json.error);
       setMarketData(json);
@@ -423,6 +409,16 @@ export default function Dashboard() {
     const id = setInterval(fetchStatus, 20000);
     return () => clearInterval(id);
   }, []);
+
+  // Авто-включение авто-выпуска Bitget при загрузке
+  useEffect(() => {
+    if (!allAutoRelease) return;
+    const st = allAutoRelease["bitget"];
+    if (st?.supported && !st?.enabled) {
+      fetch(`${BASE}api/auto-release/bitget/enable`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(() => fetchStatus()).catch(() => {});
+    }
+  }, [allAutoRelease]);
 
   // Авто-переключение банка при исчерпании лимита
   useEffect(() => {
@@ -863,17 +859,9 @@ export default function Dashboard() {
                       <span className="text-[8px] text-muted-foreground">{topSellersCountdown}с</span>
                     </div>
                   </div>
-                  <div className="flex rounded-md overflow-hidden border" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
-                    {(["bitget", "bybit", "okx"] as const).map(ex => (
-                      <button key={ex} onClick={() => setTopSellersExchange(ex)}
-                        className={`px-2.5 py-0.5 text-[9px] font-bold uppercase transition-all ${
-                          topSellersExchange === ex
-                            ? "bg-yellow-400/20 text-yellow-300"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}>
-                        {ex === "bitget" ? "Bitget" : ex === "bybit" ? "Bybit" : "OKX"}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase"
+                    style={{ borderColor: "rgba(0,198,143,0.4)", background: "rgba(0,198,143,0.12)", color: "#00c68f" }}>
+                    Bitget
                   </div>
                 </div>
 

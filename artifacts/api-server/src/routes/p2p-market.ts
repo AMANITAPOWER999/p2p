@@ -191,6 +191,14 @@ router.get("/p2p/market-price", async (req, res) => {
   const currency = (req.query.currency as string) ?? "VND";
 
   try {
+    if (exchange === "bitget") {
+      const tradeType = side === "BUY" ? "buy" : "sell";
+      const items = await fetchBitgetTop(coin, currency, tradeType as "buy" | "sell", 0);
+      const top3 = items.slice(0, 3);
+      const avg = top3.length > 0 ? top3.reduce((s, x) => s + x.price, 0) / top3.length : 0;
+      return res.json({ exchange, side, coin, currency, top3, avg: parseFloat(avg.toFixed(2)) });
+    }
+
     if (exchange === "bybit") {
       const body = {
         tokenId: coin,
@@ -205,7 +213,6 @@ router.get("/p2p/market-price", async (req, res) => {
         body: JSON.stringify(body),
       });
       const json: any = await resp.json();
-
       const items: any[] = json?.result?.items ?? [];
       const top3 = items.slice(0, 3).map((it: any) => ({
         nickname: it.nickName ?? it.userId,
@@ -215,12 +222,7 @@ router.get("/p2p/market-price", async (req, res) => {
         quantity: parseFloat(it.quantity ?? "0"),
         paymentMethods: (it.payments ?? []).map((p: any) => p.paymentType ?? p),
       }));
-
-      const avg =
-        top3.length > 0
-          ? top3.reduce((s, x) => s + x.price, 0) / top3.length
-          : 0;
-
+      const avg = top3.length > 0 ? top3.reduce((s, x) => s + x.price, 0) / top3.length : 0;
       return res.json({ exchange, side, coin, currency, top3, avg: parseFloat(avg.toFixed(2)) });
     }
 
