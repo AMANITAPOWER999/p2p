@@ -237,6 +237,7 @@ export default function Dashboard() {
   const [orderCurrency] = useState("VND");
   const [manualPrice, setManualPrice] = useState("");
   const [manualAmount, setManualAmount] = useState("");
+  const [topPickerRank, setTopPickerRank] = useState<number | null>(null);
   const [marketData, setMarketData] = useState<{
     top3: Array<{ nickname: string; price: number; minAmount: number; maxAmount: number }>;
     avg: number;
