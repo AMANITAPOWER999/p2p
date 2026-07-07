@@ -119,42 +119,43 @@ async function fetchOkxTop(coin: string, currency: string, side: "buy" | "sell",
 
 async function fetchBitgetTop(coin: string, currency: string, side: "buy" | "sell", _amount: number) {
   const webToken = process.env["BITGET_WEB_TOKEN"] ?? "";
-
-  // Prefer web token (browser session) — gives access to the P2P marketplace listings
-  if (webToken) {
-    // tradeType: 1 = sell (merchant selling USDT), 2 = buy
-    const tradeType = side === "sell" ? "1" : "2";
-    const url = `https://www.bitget.com/v1/p2p/advertisement/list?coinName=${coin}&fiatCode=${currency}&tradeType=${tradeType}&pageNo=1&pageSize=10`;
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 8000);
-      const resp = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "application/json, text/plain, */*",
-          "Referer": "https://www.bitget.com/p2p-trading/",
-          "Cookie": webToken.includes("=") ? webToken : `Authorization=${webToken}`,
-          "Authorization": webToken.startsWith("Bearer ") ? webToken : (webToken.includes("=") ? "" : webToken),
-        },
-        signal: ctrl.signal,
-      });
-      clearTimeout(t);
-      const json: any = await resp.json();
-      if (json.code === "00000" && Array.isArray(json.data)) {
-        return (json.data as any[]).slice(0, 10).map((it: any, i: number) => ({
-          rank: i + 1,
-          nickname: it.nickName ?? it.merchantName ?? it.advertiserName ?? "—",
-          price: parseFloat(it.price ?? it.unitPrice ?? "0"),
-          minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
-          maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
-        }));
-      }
-      logger.warn({ code: json.code, msg: json.msg }, "Bitget web P2P non-success");
-    } catch (e) {
-      logger.warn({ err: String(e) }, "Bitget web P2P fetch error");
+  // tradeType: "1" = sell (merchants selling USDT = user buys), "2" = buy (merchants buying USDT = user sells)
+  const tradeType = side === "buy" ? "1" : "2";
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const headers: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "application/json, text/plain, */*",
+      "Content-Type": "application/json;charset=UTF-8",
+      "Origin": "https://www.bitget.com",
+      "Referer": "https://www.bitget.com/p2p-trading/",
+    };
+    if (webToken) {
+      headers["Cookie"] = webToken;
     }
+    const resp = await fetch("https://www.bitget.com/v1/p2p/pub/adv/queryAdvList", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ coinName: coin, fiatCode: currency, tradeType, pageNo: 1, pageSize: 20 }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    const json: any = await resp.json();
+    const list: any[] = json?.data?.dataList ?? [];
+    if (json.code === "00000" && list.length > 0) {
+      return list.slice(0, 10).map((it: any, i: number) => ({
+        rank: i + 1,
+        nickname: it.nickName ?? it.merchantName ?? it.advertiserName ?? "—",
+        price: parseFloat(it.price ?? it.unitPrice ?? "0"),
+        minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
+        maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
+      }));
+    }
+    logger.warn({ code: json.code, msg: json.msg, listLen: list.length }, "Bitget P2P queryAdvList empty/non-success");
+  } catch (e) {
+    logger.warn({ err: String(e) }, "Bitget P2P fetch error");
   }
-
   return [];
 }
 

@@ -264,8 +264,10 @@ export default function Dashboard() {
   type TopSellersData = {
     bitget_150k_buy: TopSeller[]; bitget_150k_sell: TopSeller[];
     bitget_10m_buy: TopSeller[];  bitget_10m_sell: TopSeller[];
+    bybit_150k_buy: TopSeller[];  bybit_150k_sell: TopSeller[];
+    bybit_10m_buy: TopSeller[];   bybit_10m_sell: TopSeller[];
   };
-  const [topSellersExchange, setTopSellersExchange] = useState<"bitget">("bitget");
+  const [topSellersExchange, setTopSellersExchange] = useState<"bitget" | "bybit">("bitget");
   const [topSellersAmount, setTopSellersAmount] = useState<"150k" | "10m">("150k");
   const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
   const [topSellersLoading, setTopSellersLoading] = useState(false);
@@ -278,7 +280,7 @@ export default function Dashboard() {
   // Refs to avoid stale closures inside interval callbacks
   const holdPositionRef = useRef<number | null>(null);
   const topSellersRef = useRef<TopSellersData | null>(null);
-  const topSellersExchangeRef = useRef<"bitget">("bitget");
+  const topSellersExchangeRef = useRef<"bitget" | "bybit">("bitget");
   const topSellersAmountRef = useRef<"150k" | "10m">("150k");
   const orderSidesRef = useRef<Set<"BUY" | "SELL">>(new Set(["BUY", "SELL"]));
   useEffect(() => { holdPositionRef.current = holdPosition; }, [holdPosition]);
@@ -287,45 +289,24 @@ export default function Dashboard() {
   useEffect(() => { topSellersAmountRef.current = topSellersAmount; }, [topSellersAmount]);
   useEffect(() => { orderSidesRef.current = orderSides; }, [orderSides]);
 
-  async function fetchBitgetP2PDirect(tradeType: "1" | "2"): Promise<Array<{rank:number;nickname:string;price:number;minAmount:number;maxAmount:number}>> {
-    try {
-      const r = await fetch("https://www.bitget.com/v1/p2p/pub/adv/queryAdvList", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json, text/plain, */*",
-          "Content-Type": "application/json;charset=UTF-8",
-          "Referer": "https://www.bitget.com/p2p-trade",
-          "origin": "https://www.bitget.com",
-          "locale": "en_US",
-          "language": "en_US",
-          "terminaltype": "1",
-        },
-        body: JSON.stringify({ coinName: "USDT", fiatCode: "VND", tradeType, pageNo: 1, pageSize: 20 }),
-      });
-      const d = await r.json();
-      const list: any[] = d?.data?.dataList ?? [];
-      return list.map((it: any, i: number) => ({
-        rank: i + 1,
-        nickname: it.nickName ?? it.merchantName ?? "—",
-        price: parseFloat(it.price ?? "0"),
-        minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
-        maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
-      }));
-    } catch { return []; }
-  }
-
   async function fetchTopSellers() {
     setTopSellersLoading(true);
     try {
-      // Fetch directly from Bitget browser API (bypasses server geo-restriction, CORS: *)
-      // tradeType "1" = sell side (merchants selling USDT), "2" = buy side (merchants buying USDT)
-      const [sellList, buyList] = await Promise.all([
-        fetchBitgetP2PDirect("1"),
-        fetchBitgetP2PDirect("2"),
+      const g = (ex: string, side: string, amt: number) =>
+        fetch(`${BASE}api/p2p/top-sellers?exchange=${ex}&side=${side}&coin=USDT&currency=VND&amount=${amt}`)
+          .then(r => r.json()).then(d => (d.top ?? []) as TopSeller[]).catch(() => [] as TopSeller[]);
+      const [
+        bgBuy150k, bgSell150k, bgBuy10m, bgSell10m,
+        bbBuy150k, bbSell150k, bbBuy10m, bbSell10m,
+      ] = await Promise.all([
+        g("bitget","buy",150000), g("bitget","sell",150000), g("bitget","buy",10000000), g("bitget","sell",10000000),
+        g("bybit","buy",150000),  g("bybit","sell",150000),  g("bybit","buy",10000000),  g("bybit","sell",10000000),
       ]);
       const data: TopSellersData = {
-        bitget_150k_buy: buyList,   bitget_150k_sell: sellList,
-        bitget_10m_buy:  buyList,   bitget_10m_sell:  sellList,
+        bitget_150k_buy: bgBuy150k,  bitget_150k_sell: bgSell150k,
+        bitget_10m_buy:  bgBuy10m,   bitget_10m_sell:  bgSell10m,
+        bybit_150k_buy:  bbBuy150k,  bybit_150k_sell:  bbSell150k,
+        bybit_10m_buy:   bbBuy10m,   bybit_10m_sell:   bbSell10m,
       };
       setTopSellers(data);
       setTopSellersCountdown(15);
@@ -886,9 +867,19 @@ export default function Dashboard() {
                       <span className="text-[8px] text-muted-foreground">{topSellersCountdown}с</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase"
-                    style={{ borderColor: "rgba(0,198,143,0.4)", background: "rgba(0,198,143,0.12)", color: "#00c68f" }}>
-                    Bitget
+                  <div className="flex items-center gap-1">
+                    {(["bitget", "bybit"] as const).map(ex => (
+                      <button key={ex} onClick={() => setTopSellersExchange(ex)}
+                        className={`px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase transition-all ${
+                          topSellersExchange === ex
+                            ? ex === "bitget"
+                              ? "border-[#00c68f]/50 bg-[#00c68f]/15 text-[#00c68f]"
+                              : "border-yellow-400/50 bg-yellow-400/15 text-yellow-300"
+                            : "border-white/10 bg-white/4 text-muted-foreground hover:text-foreground"
+                        }`}>
+                        {ex === "bitget" ? "Bitget" : "Bybit"}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -939,7 +930,7 @@ export default function Dashboard() {
                   };
                   const renderEmpty = () => (
                     <div className="flex flex-col items-center gap-0.5 py-3 px-1">
-                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет активных объявлений Bitget P2P</span>
+                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет данных</span>
                     </div>
                   );
                   const skeleton = (
@@ -1002,28 +993,9 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Целевые биржи */}
-          {enabledExchanges.size === 0 ? (
+          {enabledExchanges.size === 0 && (
             <div className="text-[11px] text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-3 py-2">
               ⚠️ Нет выбранных бирж — включите хотя бы одну галочкой выше
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Ордер будет подан на:</div>
-              <div className="flex flex-wrap gap-1.5">
-                {[...enabledExchanges].map(ex => (
-                  <div key={ex} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border"
-                    style={{
-                      background: EXCHANGE_BRAND[ex.toLowerCase()]?.bg ?? "rgba(255,255,255,0.1)",
-                      color: EXCHANGE_BRAND[ex.toLowerCase()]?.color ?? "#fff",
-                      borderColor: EXCHANGE_BRAND[ex.toLowerCase()]?.border ?? "rgba(255,255,255,0.2)",
-                    }}>
-                    <img src={EXCHANGE_ICON[ex.toLowerCase()]} alt="" className="w-3 h-3 rounded-sm"
-                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                    {ex}
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
