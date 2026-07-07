@@ -229,8 +229,11 @@ export default function Dashboard() {
   const USERS = ["Manunin A", "Sazykin V"];
 
   // Order panel state
-  const [orderSide, setOrderSide] = useState<"BUY" | "SELL">("BUY");
+  const [orderSides, setOrderSides] = useState<Set<"BUY" | "SELL">>(new Set(["BUY", "SELL"]));
   const [orderCoin, setOrderCoin] = useState("USDT");
+  // Balance maintenance
+  const [balanceEnabled, setBalanceEnabled] = useState(false);
+  const [balancePercent, setBalancePercent] = useState(50);
   const [orderCurrency] = useState("VND");
   const [manualPrice, setManualPrice] = useState("");
   const [manualAmount, setManualAmount] = useState("");
@@ -325,7 +328,8 @@ export default function Dashboard() {
     setMarketError(null);
     setMarketData(null);
     try {
-      const r = await fetch(`${BASE}api/p2p/market-price?exchange=bybit&side=${orderSide}&coin=${orderCoin}&currency=${orderCurrency}`);
+      const side = orderSides.has("BUY") ? "BUY" : "SELL";
+      const r = await fetch(`${BASE}api/p2p/market-price?exchange=bybit&side=${side}&coin=${orderCoin}&currency=${orderCurrency}`);
       const json = await r.json();
       if (json.error) throw new Error(json.error);
       setMarketData(json);
@@ -644,18 +648,39 @@ export default function Dashboard() {
 
           {/* Сторона + монета */}
           <div className="flex gap-2">
-            <div className="flex rounded-lg border border-border overflow-hidden flex-1">
-              {(["BUY", "SELL"] as const).map(s => (
-                <button key={s} onClick={() => { setOrderSide(s); setMarketData(null); setOrderResult(null); }}
-                  className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-bold transition-all ${
-                    orderSide === s
-                      ? s === "BUY" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}>
-                  {s === "BUY" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {s === "BUY" ? "Купить" : "Продать"}
-                </button>
-              ))}
+            <div className="flex gap-1.5 flex-1">
+              {(["BUY", "SELL"] as const).map(s => {
+                const active = orderSides.has(s);
+                return (
+                  <button key={s}
+                    onClick={() => {
+                      setOrderSides(prev => {
+                        const next = new Set(prev);
+                        next.has(s) ? next.delete(s) : next.add(s);
+                        return next;
+                      });
+                      setOrderResult(null);
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg border transition-all ${
+                      active
+                        ? s === "BUY"
+                          ? "bg-green-500/20 text-green-400 border-green-500/40"
+                          : "bg-red-500/20 text-red-400 border-red-500/40"
+                        : "text-muted-foreground border-white/14 hover:text-foreground"
+                    }`}
+                    style={!active ? { background: "rgba(255,255,255,0.07)" } : {}}>
+                    <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all ${
+                      active
+                        ? s === "BUY" ? "bg-green-500 border-green-400" : "bg-red-500 border-red-400"
+                        : "border-white/30 bg-white/5"
+                    }`}>
+                      {active && <span className="text-white text-[8px] font-black leading-none">✓</span>}
+                    </span>
+                    {s === "BUY" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                    {s === "BUY" ? "Купить" : "Продать"}
+                  </button>
+                );
+              })}
             </div>
             <select value={orderCoin} onChange={e => setOrderCoin(e.target.value)}
               className="rounded-lg border text-xs font-semibold px-2 py-1.5 text-foreground"
@@ -693,7 +718,7 @@ export default function Dashboard() {
                   {/* Основные цены — покупка и продажа */}
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => { setOrderSide("BUY"); setManualPrice(String(autoRate.ourBuy)); }}
+                      onClick={() => { setOrderSides(new Set(["BUY"])); setManualPrice(String(autoRate.ourBuy)); }}
                       className="rounded-xl border p-3 text-left transition-all hover:brightness-110 active:scale-95"
                       style={{ background: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.35)" }}>
                       <div className="text-[10px] font-bold uppercase tracking-widest text-green-400 mb-1 flex items-center gap-1">
@@ -705,7 +730,7 @@ export default function Dashboard() {
                       <div className="text-[10px] text-green-400/60 mt-0.5">₫ / USDT</div>
                     </button>
                     <button
-                      onClick={() => { setOrderSide("SELL"); setManualPrice(String(autoRate.ourSell)); }}
+                      onClick={() => { setOrderSides(new Set(["SELL"])); setManualPrice(String(autoRate.ourSell)); }}
                       className="rounded-xl border p-3 text-left transition-all hover:brightness-110 active:scale-95"
                       style={{ background: "rgba(239,68,68,0.10)", borderColor: "rgba(239,68,68,0.35)" }}>
                       <div className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1 flex items-center gap-1">
@@ -799,7 +824,7 @@ export default function Dashboard() {
                     return (
                       <button key={i}
                         onClick={() => {
-                          setOrderSide(side === "buy" ? "BUY" : "SELL");
+                          setOrderSides(new Set([side === "buy" ? "BUY" : "SELL"] as ("BUY"|"SELL")[]));
                           setManualPrice(String(targetPrice));
                           setSelectedPosition({ side, rank: i });
                         }}
@@ -903,33 +928,128 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Поддержание баланса */}
+          {(() => {
+            const bankTotal = Object.values(bankBalances).reduce((s, v) => s + v, 0);
+            const exchangeUSDT = (accounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
+            const midRate = autoRate?.market.mid ?? 0;
+            const exchangeInVND = exchangeUSDT * midRate;
+            const total = bankTotal + exchangeInVND;
+            const bankRatio = total > 0 ? (bankTotal / total) * 100 : 50;
+            let forcedSide: "BUY" | "SELL" | null = null;
+            if (balanceEnabled && total > 0) {
+              if (bankRatio < balancePercent) forcedSide = "SELL";
+              else if (bankRatio > balancePercent) forcedSide = "BUY";
+            }
+            return (
+              <div className="rounded-lg border p-2.5 space-y-2"
+                style={{ background: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.12)" }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Баланс бирж / банк</span>
+                    {balanceEnabled && forcedSide && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                        forcedSide === "SELL"
+                          ? "bg-red-500/20 border-red-400/30 text-red-300"
+                          : "bg-green-500/20 border-green-400/30 text-green-300"
+                      }`}>
+                        → {forcedSide === "SELL" ? "только продажа" : "только покупка"}
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={() => setBalanceEnabled(e => !e)}
+                    className={`w-8 h-4.5 rounded-full border transition-all relative ${
+                      balanceEnabled ? "bg-yellow-400/30 border-yellow-400/50" : "bg-white/10 border-white/20"
+                    }`}
+                    style={{ width: 32, height: 18, flexShrink: 0 }}>
+                    <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all ${
+                      balanceEnabled ? "left-[14px] bg-yellow-400" : "left-0.5 bg-white/40"
+                    }`} />
+                  </button>
+                </div>
+                {balanceEnabled && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground flex-1">Целевой % банка от общего</span>
+                      <div className="flex items-center gap-1">
+                        <input type="number" min={1} max={99} value={balancePercent}
+                          onChange={e => setBalancePercent(Math.max(1, Math.min(99, Number(e.target.value))))}
+                          className="w-12 text-center rounded border text-xs font-bold text-foreground focus:outline-none"
+                          style={{ background: "rgba(255,255,255,0.10)", borderColor: "rgba(255,255,255,0.20)" }} />
+                        <span className="text-[10px] text-muted-foreground">%</span>
+                      </div>
+                    </div>
+                    {midRate > 0 && (
+                      <div className="grid grid-cols-2 gap-1 text-[9px]">
+                        <div className="rounded px-2 py-1 bg-blue-500/10 border border-blue-400/20 text-center">
+                          <div className="text-blue-300/70">Банк (VND)</div>
+                          <div className="font-bold text-blue-300">{bankTotal.toLocaleString("ru", { maximumFractionDigits: 0 })} ₫</div>
+                          <div className="text-blue-300/60">{bankRatio.toFixed(1)}%</div>
+                        </div>
+                        <div className="rounded px-2 py-1 bg-yellow-500/10 border border-yellow-400/20 text-center">
+                          <div className="text-yellow-300/70">Биржа (USDT)</div>
+                          <div className="font-bold text-yellow-300">{exchangeUSDT.toFixed(2)} USDT</div>
+                          <div className="text-yellow-300/60">{(100 - bankRatio).toFixed(1)}%</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Разместить */}
-          <button
-            disabled={!manualPrice || !manualAmount || orderPlacing || enabledExchanges.size === 0}
-            onClick={async () => {
-              setOrderPlacing(true);
-              setOrderResult(null);
-              const targets = [...enabledExchanges];
-              try {
-                await new Promise(r => setTimeout(r, 600));
-                setOrderResult(targets.map(ex => ({
-                  exchange: ex,
-                  ok: true,
-                  msg: `${orderSide} ${manualAmount} ${orderCoin} @ ${parseFloat(manualPrice).toLocaleString("ru")} ₫`,
-                })));
-              } finally {
-                setOrderPlacing(false);
-              }
-            }}
-            className={`w-full py-2.5 rounded-xl border font-bold text-sm disabled:opacity-40 transition-all ${
-              orderSide === "BUY"
+          {(() => {
+            const bankTotal = Object.values(bankBalances).reduce((s, v) => s + v, 0);
+            const exchangeUSDT = (accounts ?? []).reduce((s, a) => s + (a.balance ?? 0), 0);
+            const midRate = autoRate?.market.mid ?? 0;
+            const exchangeInVND = exchangeUSDT * midRate;
+            const total = bankTotal + exchangeInVND;
+            const bankRatio = total > 0 ? (bankTotal / total) * 100 : 50;
+            let effectiveSides = orderSides;
+            if (balanceEnabled && total > 0) {
+              if (bankRatio < balancePercent) effectiveSides = new Set(["SELL"]);
+              else if (bankRatio > balancePercent) effectiveSides = new Set(["BUY"]);
+            }
+            const sideLabel = effectiveSides.has("BUY") && effectiveSides.has("SELL")
+              ? "покупку и продажу"
+              : effectiveSides.has("BUY") ? "покупку" : effectiveSides.has("SELL") ? "продажу" : "–";
+            const btnColor = effectiveSides.has("BUY") && effectiveSides.has("SELL")
+              ? "bg-blue-500/20 border-blue-500/40 text-blue-400 hover:bg-blue-500/30"
+              : effectiveSides.has("BUY")
                 ? "bg-green-500/20 border-green-500/40 text-green-400 hover:bg-green-500/30"
-                : "bg-red-500/20 border-red-500/40 text-red-400 hover:bg-red-500/30"
-            }`}>
-            {orderPlacing
-              ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Размещение...</span>
-              : `Разместить ${orderSide === "BUY" ? "покупку" : "продажу"} на ${enabledExchanges.size} бирж${enabledExchanges.size === 1 ? "е" : enabledExchanges.size < 5 ? "ах" : "ах"}`}
-          </button>
+                : "bg-red-500/20 border-red-500/40 text-red-400 hover:bg-red-500/30";
+            const exCount = enabledExchanges.size;
+            const exSuffix = exCount === 1 ? "е" : exCount < 5 ? "ах" : "ах";
+            return (
+              <button
+                disabled={!manualPrice || !manualAmount || orderPlacing || enabledExchanges.size === 0 || effectiveSides.size === 0}
+                onClick={async () => {
+                  setOrderPlacing(true);
+                  setOrderResult(null);
+                  const targets = [...enabledExchanges];
+                  const sides = [...effectiveSides];
+                  try {
+                    await new Promise(r => setTimeout(r, 600));
+                    setOrderResult(targets.flatMap(ex =>
+                      sides.map(side => ({
+                        exchange: ex,
+                        ok: true,
+                        msg: `${side} ${manualAmount} ${orderCoin} @ ${parseFloat(manualPrice).toLocaleString("ru")} ₫`,
+                      }))
+                    ));
+                  } finally {
+                    setOrderPlacing(false);
+                  }
+                }}
+                className={`w-full py-2.5 rounded-xl border font-bold text-sm disabled:opacity-40 transition-all ${btnColor}`}>
+                {orderPlacing
+                  ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Размещение...</span>
+                  : `Разместить ${sideLabel} на ${exCount} бирж${exSuffix}`}
+              </button>
+            );
+          })()}
 
           {orderResult && (
             <div className="space-y-1">
