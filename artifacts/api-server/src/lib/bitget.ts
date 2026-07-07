@@ -71,13 +71,14 @@ export async function getBitgetP2POrders(
   apiKey: string, secret: string, passphrase: string,
   params: { page?: number; limit?: number } = {}
 ): Promise<BitgetP2PResult> {
-  const page = String(params.page ?? 1);
+  const page  = String(params.page  ?? 1);
   const limit = String(params.limit ?? 20);
 
+  // Primary working endpoint confirmed: /api/v2/p2p/orderList
   const endpoints = [
-    { path: "/api/v2/p2p/merchantTrade/orderList", p: { pageNo: page, pageSize: limit } },
-    { path: "/api/v2/p2p/order/list",              p: { pageNo: page, pageSize: limit } },
-    { path: "/api/v2/p2p/order/advancedList",      p: { pageNo: page, pageSize: limit } },
+    { path: "/api/v2/p2p/orderList",               p: { pageNo: page, pageSize: limit } },
+    { path: "/api/v2/p2p/merchantTrade/orderList",  p: { pageNo: page, pageSize: limit } },
+    { path: "/api/v2/p2p/order/list",               p: { pageNo: page, pageSize: limit } },
   ];
 
   for (const ep of endpoints) {
@@ -94,7 +95,24 @@ export async function getBitgetP2POrders(
       const rawData = (data.data ?? data.result ?? {}) as Record<string, unknown>;
       const list = rawData.orderList ?? rawData.list ?? rawData.rows ?? rawData.data ?? rawData.orders ?? [];
       const total = Number(rawData.total ?? rawData.totalCount ?? (Array.isArray(list) ? list.length : 0));
-      const orders = Array.isArray(list) ? (list as BitgetP2POrder[]) : [];
+
+      // Map Bitget-specific field names to our interface
+      const orders: BitgetP2POrder[] = Array.isArray(list) ? (list as Record<string, string>[]).map(o => ({
+        orderId:          o.orderId ?? o.orderNo,
+        side:             o.side,
+        coinName:         o.coin,
+        currencyName:     o.fiat,
+        totalPrice:       o.amount,        // fiat total (e.g. 100206.81 VND)
+        orderAmount:      o.amount,
+        price:            o.price,
+        amount:           o.count,         // crypto amount (e.g. 3.81 USDT)
+        status:           o.status,
+        orderStatus:      o.status,
+        nickName:         o.side === "sell" ? o.buyerRealName  : o.sellerRealName,  // counterparty
+        counterNickName:  o.side === "sell" ? o.buyerRealName  : o.sellerRealName,
+        createTime:       o.cTime,
+        updateTime:       o.uTime,
+      })) : [];
 
       logger.info({ path: ep.path, ordersFound: orders.length, total }, "Bitget P2P: success");
       return { orders, total, rawResponse: data };

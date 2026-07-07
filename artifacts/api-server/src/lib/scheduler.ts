@@ -3,7 +3,7 @@ import { getMexcC2COrdersWeb, mapMexcStatusToInternal, mapMexcTradeType, type Me
 import { getBybitP2POrders, getBybitPaidOrders, releaseBybitOrder, mapBybitStatus, mapBybitSide, type BybitP2POrder } from "./bybit";
 import { getOkxPaidOrders, releaseOkxOrder } from "./okx";
 import { getGatePaidOrders, releaseGateOrder } from "./gate";
-import { getBitgetPaidOrders, releaseBitgetOrder } from "./bitget";
+import { getBitgetPaidOrders, getBitgetP2POrders, releaseBitgetOrder, mapBitgetStatus, mapBitgetSide } from "./bitget";
 import { db, tradesTable, accountsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
@@ -31,12 +31,19 @@ export interface SyncState {
     lastResult: ExchangeSyncResult | null;
     enabled: boolean;
   };
+  bitget: {
+    running: boolean;
+    lastSyncAt: Date | null;
+    lastResult: ExchangeSyncResult | null;
+    enabled: boolean;
+  };
   nextSyncAt: Date | null;
 }
 
 export const syncState: SyncState = {
-  mexc: { running: false, lastSyncAt: null, lastResult: null, enabled: false },
-  bybit: { running: false, lastSyncAt: null, lastResult: null, enabled: false },
+  mexc:   { running: false, lastSyncAt: null, lastResult: null, enabled: false },
+  bybit:  { running: false, lastSyncAt: null, lastResult: null, enabled: false },
+  bitget: { running: false, lastSyncAt: null, lastResult: null, enabled: false },
   nextSyncAt: null,
 };
 
@@ -46,14 +53,16 @@ function parseNum(v: string | number | undefined): number {
   return isNaN(n) ? 0 : n;
 }
 
-async function getOrCreateAccount(exchange: "mexc" | "bybit", apiKey?: string): Promise<number> {
+async function getOrCreateAccount(exchange: "mexc" | "bybit" | "bitget", apiKey?: string): Promise<number> {
   const existing = await db.select().from(accountsTable).where(eq(accountsTable.exchange, exchange)).limit(1);
   if (existing.length > 0) return existing[0].id;
 
+  const nameMap: Record<string, string> = { mexc: "MEXC C2C (авто)", bybit: "Bybit P2P (авто)", bitget: "Bitget P2P (авто)" };
+  const ownerMap: Record<string, string> = { mexc: "MEXC", bybit: "Bybit", bitget: "Bitget" };
   const [newAcc] = await db.insert(accountsTable).values({
-    name: exchange === "mexc" ? "MEXC C2C (авто)" : "Bybit P2P (авто)",
+    name: nameMap[exchange] ?? `${exchange} (авто)`,
     exchange,
-    ownerName: exchange === "mexc" ? "MEXC" : "Bybit",
+    ownerName: ownerMap[exchange] ?? exchange,
     bankName: "",
     apiKey: apiKey ?? null,
     apiSecret: null,
@@ -223,6 +232,81 @@ async function insertBybitOrder(accId: number, order: BybitP2POrder): Promise<{ 
   return { didImport: true };
 }
 
+// ─── BITGET ──────────────────────────────────────────────────────────────────
+
+export async function runBitgetSync(apiKey: string, secret: string, passphrase: string): Promise<ExchangeSyncResult> {
+  if (syncState.bitget.running) return syncState.bitget.lastResult ?? { success: false, imported: 0, skipped: 0, totalFetched: 0, message: "уже запущено" };
+  syncState.bitget.running = true;
+  logger.info("Bitget auto-sync: starting");
+
+  try {
+    const accId = await getOrCreateAccount("bitget", apiKey);
+    const PAGE_SIZE = 20;
+    let page = 1, totalFetched = 0, imported = 0, skipped = 0, keepGoing = true;
+    let rawSample: unknown = null;
+
+    while (keepGoing) {
+      const result = await getBitgetP2POrders(apiKey, secret, passphrase, { page, limit: PAGE_SIZE });
+      if (page === 1) rawSample = result.rawResponse;
+      if (!result.orders?.length) break;
+
+      totalFetched += result.orders.length;
+      for (const order of result.orders) {
+        const { didImport } = await insertBitgetOrder(accId, order);
+        didImport ? imported++ : skipped++;
+      }
+      keepGoing = result.orders.length >= PAGE_SIZE && page < 100;
+      page++;
+    }
+
+    await refreshAccountStats(accId);
+    const res: ExchangeSyncResult = {
+      success: true, imported, skipped, totalFetched,
+      message: `Найдено: ${totalFetched}, импортировано: ${imported}, дублей: ${skipped}`,
+      ...(totalFetched === 0 ? { rawSample } : {}),
+    };
+    syncState.bitget.lastSyncAt = new Date();
+    syncState.bitget.lastResult = res;
+    logger.info({ imported, skipped, totalFetched }, "Bitget auto-sync: completed");
+    return res;
+  } catch (err) {
+    logger.error({ err }, "Bitget auto-sync: failed");
+    const res: ExchangeSyncResult = { success: false, imported: 0, skipped: 0, totalFetched: 0, message: `Ошибка: ${(err as Error).message}` };
+    syncState.bitget.lastSyncAt = new Date();
+    syncState.bitget.lastResult = res;
+    return res;
+  } finally {
+    syncState.bitget.running = false;
+  }
+}
+
+async function insertBitgetOrder(accId: number, order: import("./bitget").BitgetP2POrder): Promise<{ didImport: boolean }> {
+  const externalId = String(order.orderId ?? "");
+  if (externalId) {
+    const existing = await db.select({ id: tradesTable.id }).from(tradesTable).where(eq(tradesTable.exchangeTradeId, externalId)).limit(1);
+    if (existing.length > 0) return { didImport: false };
+  }
+  const asset      = (order.coinName ?? "USDT").toUpperCase();
+  const fiat       = (order.currencyName ?? "VND").toUpperCase();
+  const amount     = parseNum(order.amount);          // crypto (USDT)
+  const price      = parseNum(order.price);
+  const fiatAmount = parseNum(order.totalPrice ?? order.orderAmount);  // VND
+  const side       = mapBitgetSide(order.side ?? "sell");
+  const status     = mapBitgetStatus(order.status ?? order.orderStatus ?? "");
+  const createdAt  = order.createTime ? new Date(Number(order.createTime)) : new Date();
+  const completedAt = status === "completed" ? createdAt : null;
+  const counterparty = order.nickName ?? order.counterNickName ?? null;
+
+  await db.insert(tradesTable).values({
+    accountId: accId,
+    exchangeTradeId: externalId || null,
+    side, asset, fiatCurrency: fiat, amount, price, fiatAmount,
+    status, counterpartyName: counterparty, paymentMethod: null,
+    createdAt, completedAt,
+  });
+  return { didImport: true };
+}
+
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
 async function refreshAccountStats(accId: number) {
@@ -388,19 +472,23 @@ let syncInterval: ReturnType<typeof setInterval> | null = null;
 let releaseInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startAutoSync(): void {
-  const mexcToken = process.env["MEXC_WEB_TOKEN"];
-  const bybitKey = process.env["BYBIT_API_KEY"];
-  const bybitSecret = process.env["BYBIT_API_SECRET"];
+  const mexcToken    = process.env["MEXC_WEB_TOKEN"];
+  const bybitKey     = process.env["BYBIT_API_KEY"];
+  const bybitSecret  = process.env["BYBIT_API_SECRET"];
+  const bitgetKey    = process.env["BITGET_API_KEY"];
+  const bitgetSecret = process.env["BITGET_SECRET_KEY"];
+  const bitgetPass   = process.env["BITGET_PASSPHRASE"] ?? "";
 
-  syncState.mexc.enabled = !!mexcToken;
-  syncState.bybit.enabled = !!(bybitKey && bybitSecret);
+  syncState.mexc.enabled   = !!mexcToken;
+  syncState.bybit.enabled  = !!(bybitKey && bybitSecret);
+  syncState.bitget.enabled = !!(bitgetKey && bitgetSecret);
 
-  if (!syncState.mexc.enabled && !syncState.bybit.enabled) {
+  if (!syncState.mexc.enabled && !syncState.bybit.enabled && !syncState.bitget.enabled) {
     logger.warn("No exchange credentials set — auto-sync disabled");
     return;
   }
 
-  logger.info({ mexc: syncState.mexc.enabled, bybit: syncState.bybit.enabled, intervalMs: SYNC_INTERVAL_MS }, "Auto-sync: scheduler started");
+  logger.info({ mexc: syncState.mexc.enabled, bybit: syncState.bybit.enabled, bitget: syncState.bitget.enabled, intervalMs: SYNC_INTERVAL_MS }, "Auto-sync: scheduler started");
 
   const runAll = () => {
     if (syncState.mexc.enabled) {
@@ -411,6 +499,12 @@ export function startAutoSync(): void {
       const k = process.env["BYBIT_API_KEY"]!;
       const s = process.env["BYBIT_API_SECRET"]!;
       runBybitSync(k, s).catch(err => logger.error({ err }, "Bybit periodic sync failed"));
+    }
+    if (syncState.bitget.enabled) {
+      const k = process.env["BITGET_API_KEY"]!;
+      const s = process.env["BITGET_SECRET_KEY"]!;
+      const p = process.env["BITGET_PASSPHRASE"] ?? "";
+      runBitgetSync(k, s, p).catch(err => logger.error({ err }, "Bitget periodic sync failed"));
     }
   };
 

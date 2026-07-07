@@ -911,7 +911,9 @@ export default function Dashboard() {
                     );
                   };
                   const renderEmpty = () => (
-                    <div className="text-[9px] text-muted-foreground text-center py-2">—</div>
+                    <div className="flex flex-col items-center gap-0.5 py-3 px-1">
+                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Рыночные данные Bitget P2P недоступны через API</span>
+                    </div>
                   );
                   const skeleton = (
                     <div className="space-y-1 animate-pulse">
@@ -921,20 +923,24 @@ export default function Dashboard() {
                   return (
                     <div className="grid grid-cols-2 divide-x px-0 pb-2" style={{ divideColor: "rgba(255,255,255,0.07)" }}>
                       {/* Покупка (BUY) */}
-                      <div className="px-2.5 pt-2">
+                      <div className="px-2.5 pt-2 flex flex-col min-h-0">
                         <div className="flex items-center gap-1 mb-1.5">
                           <TrendingUp className="w-2.5 h-2.5 text-green-400" />
                           <span className="text-[8px] font-bold uppercase tracking-wider text-green-400">Покупка</span>
                         </div>
-                        {topSellersLoading && !topSellers ? skeleton : buyList.length ? buyList.map((s,i) => renderRow(s,i,"buy")) : renderEmpty()}
+                        <div className="overflow-y-auto max-h-[160px] scrollbar-hide">
+                          {topSellersLoading && !topSellers ? skeleton : buyList.length ? buyList.map((s,i) => renderRow(s,i,"buy")) : renderEmpty()}
+                        </div>
                       </div>
                       {/* Продажа (SELL) */}
-                      <div className="px-2.5 pt-2" style={{ borderLeft: "1px solid rgba(255,255,255,0.07)" }}>
+                      <div className="px-2.5 pt-2 flex flex-col min-h-0" style={{ borderLeft: "1px solid rgba(255,255,255,0.07)" }}>
                         <div className="flex items-center gap-1 mb-1.5">
                           <TrendingDown className="w-2.5 h-2.5 text-red-400" />
                           <span className="text-[8px] font-bold uppercase tracking-wider text-red-400">Продажа</span>
                         </div>
-                        {topSellersLoading && !topSellers ? skeleton : sellList.length ? sellList.map((s,i) => renderRow(s,i,"sell")) : renderEmpty()}
+                        <div className="overflow-y-auto max-h-[160px] scrollbar-hide">
+                          {topSellersLoading && !topSellers ? skeleton : sellList.length ? sellList.map((s,i) => renderRow(s,i,"sell")) : renderEmpty()}
+                        </div>
                       </div>
                     </div>
                   );
