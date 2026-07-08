@@ -45,3 +45,21 @@ will race past a naive TTL cache and double-call the CF API, tripping "rate limi
 Fix: dedupe with a shared in-flight promise (not just a TTL cache) so concurrent callers await one
 fetch, and use a multi-minute cache TTL (we use 5 min) to stay within the daily browser-hours budget.
 A paid CF Workers plan removes the browser-hours cap entirely if fresher data is needed later.
+
+## Free proxy bypass attempt — CONCLUSIVE NEGATIVE (2026-07-08)
+Tested 570 free public proxies (HTTP/HTTPS/SOCKS4/SOCKS5) from VN/TH/ID/PH/MY/SG, sourced from
+proxyscrape.com and geonode.com (including some labeled as residential ISP, e.g. Viettel), against
+`queryAdvList`. Only 18 even connected; all 18 returned an empty `dataList`, same as our own server IP.
+**Conclusion:** the block is not purely country-based — it fingerprints/blocks datacenter and known
+public-proxy IP ranges regardless of geolocation or ISP label. Free proxy lists will not bypass it;
+only a genuine residential/mobile IP from a real end-user's own device/network could. Do not re-attempt
+this with more free proxy lists — it has been tried exhaustively (8 proxies earlier + 570 here) with
+a 0% success rate. A paid residential proxy service is the only remaining technical bypass, at a cost.
+
+## Real merchant nicknames DO exist via our own authenticated Bitget API keys, but without prices
+`GET /api/v2/p2p/merchantList` (HMAC-signed, same auth as our orderList calls) is NOT geo-blocked and
+returns real merchant nicknames + reputation stats (completion rate, avg payment/release time). BUT it
+is a global merchant directory with no coin/fiat/price/side filtering or fields — it cannot be joined
+with p2p.army's per-payment-method prices to produce an honest "real name + real price" row. Also,
+`GET /api/v2/p2p/advList` only ever returns the caller's OWN ads (by design, not geo-block) — useless
+for third-party market listings.
