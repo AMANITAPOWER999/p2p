@@ -267,7 +267,6 @@ export default function Dashboard() {
     bitget_150k_buy: TopSeller[]; bitget_150k_sell: TopSeller[];
     bitget_10m_buy: TopSeller[];  bitget_10m_sell: TopSeller[];
   };
-  const BITGET_WORKER_URL: string = (import.meta.env.VITE_BITGET_PROXY_URL as string) ?? "";
   const [topSellersExchange, setTopSellersExchange] = useState<"bybit" | "bitget">("bybit");
   const [topSellersAmount, setTopSellersAmount] = useState<"150k" | "10m">("150k");
   const [topSellers, setTopSellers] = useState<TopSellersData | null>(null);
@@ -298,52 +297,23 @@ export default function Dashboard() {
         fetch(`${BASE}api/p2p/top-sellers?exchange=bybit&side=${side}&coin=USDT&currency=VND&amount=${amt}`)
           .then(r => r.json()).then(d => (d.top ?? []) as TopSeller[]).catch(() => [] as TopSeller[]);
 
-      // Bitget via CF Worker (client-side → VN IP → Bitget works)
-      // tradeType "1" = merchants selling USDT (= user buys), "2" = merchants buying USDT (= user sells)
-      const gBitget = async (tradeType: "1" | "2"): Promise<TopSeller[]> => {
-        if (!BITGET_WORKER_URL) return [];
-        try {
-          const r = await fetch(BITGET_WORKER_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ coinName: "USDT", fiatCode: "VND", tradeType, pageNo: 1, pageSize: 30 }),
-          });
-          const d = await r.json();
-          const list: any[] = d?.data?.dataList ?? [];
-          if (list.length === 0) {
-            console.warn("[Bitget P2P] пустой список", { tradeType, httpStatus: r.status, code: d?.code, msg: d?.msg, raw: d });
-          } else {
-            console.log("[Bitget P2P] получено объявлений:", list.length, "tradeType", tradeType);
-          }
-          return list.map((it: any, i: number) => ({
-            rank: i + 1,
-            nickname: it.nickName ?? it.merchantName ?? "—",
-            price: parseFloat(it.price ?? "0"),
-            minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
-            maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
-          }));
-        } catch (e) {
-          console.error("[Bitget P2P] ошибка запроса к воркеру", e);
-          return [];
-        }
-      };
-      // Bitget doesn't support server-side amount filtering like Bybit — filter client-side
-      // by min/max order amount so each merchant can actually handle that transaction size.
-      const filterByAmount = (list: TopSeller[], amount: number): TopSeller[] =>
-        list
-          .filter(x => x.minAmount <= amount && x.maxAmount >= amount)
-          .slice(0, 5)
-          .map((x, i) => ({ ...x, rank: i + 1 }));
+      // Bitget via api-server (which renders p2p.army's live Bitget/VND price page through
+      // Cloudflare Browser Rendering — Bitget's own P2P API is geo-blocked). This gives real
+      // per-payment-method prices but not per-order min/max amounts, so the same list is used
+      // for both amount tiers.
+      const gBitget = (side: "buy" | "sell") =>
+        fetch(`${BASE}api/p2p/top-sellers?exchange=bitget&side=${side}&coin=USDT&currency=VND`)
+          .then(r => r.json()).then(d => (d.top ?? []) as TopSeller[]).catch(() => [] as TopSeller[]);
 
-      const [bbBuy150k, bbSell150k, bbBuy10m, bbSell10m, bgBuyAll, bgSellAll] = await Promise.all([
+      const [bbBuy150k, bbSell150k, bbBuy10m, bbSell10m, bgBuy, bgSell] = await Promise.all([
         gb("buy",150000), gb("sell",150000), gb("buy",10000000), gb("sell",10000000),
-        gBitget("1"), gBitget("2"),
+        gBitget("buy"), gBitget("sell"),
       ]);
       const data: TopSellersData = {
         bybit_150k_buy:  bbBuy150k,  bybit_150k_sell:  bbSell150k,
         bybit_10m_buy:   bbBuy10m,   bybit_10m_sell:   bbSell10m,
-        bitget_150k_buy: filterByAmount(bgBuyAll, 150000),  bitget_150k_sell: filterByAmount(bgSellAll, 150000),
-        bitget_10m_buy:  filterByAmount(bgBuyAll, 10000000), bitget_10m_sell: filterByAmount(bgSellAll, 10000000),
+        bitget_150k_buy: bgBuy,  bitget_150k_sell: bgSell,
+        bitget_10m_buy:  bgBuy,  bitget_10m_sell:  bgSell,
       };
       setTopSellers(data);
       setTopSellersCountdown(15);
@@ -967,14 +937,7 @@ export default function Dashboard() {
                   };
                   const renderEmpty = (_side: "buy" | "sell") => (
                     <div className="flex flex-col items-center gap-1 py-3 px-1">
-                      {ex === "bitget" && !BITGET_WORKER_URL ? (
-                        <span className="text-[8px] text-yellow-400/70 text-center leading-tight">
-                          Нужен CF Worker<br/>
-                          <span className="text-muted-foreground/50">VITE_BITGET_PROXY_URL</span>
-                        </span>
-                      ) : (
-                        <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет объявлений</span>
-                      )}
+                      <span className="text-[8px] text-muted-foreground/60 text-center leading-tight">Нет объявлений</span>
                     </div>
                   );
                   const skeleton = (

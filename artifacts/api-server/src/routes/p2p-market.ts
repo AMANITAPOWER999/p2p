@@ -117,46 +117,113 @@ async function fetchOkxTop(coin: string, currency: string, side: "buy" | "sell",
   } catch { return []; }
 }
 
-async function fetchBitgetTop(coin: string, currency: string, side: "buy" | "sell", _amount: number) {
-  const webToken = process.env["BITGET_WEB_TOKEN"] ?? "";
-  // tradeType: "1" = sell (merchants selling USDT = user buys), "2" = buy (merchants buying USDT = user sells)
-  const tradeType = side === "buy" ? "1" : "2";
+// Bitget's public P2P ad-list API (queryAdvList) is geo-blocked for non-VN IPs and returns
+// an empty dataList regardless of auth/cookies. As a free workaround, we render p2p.army's
+// public Bitget/VND price-aggregation page (real, live, sourced from Bitget P2P ads across
+// payment methods) via Cloudflare Browser Rendering, and parse the rendered HTML table.
+// This gives real per-payment-method buy/sell prices, but NOT individual merchant orders,
+// so there is no per-order min/max amount — the same price list is used for all amount tiers.
+type BitgetRow = { method: string; buy: number | null; sell: number | null; adsBuy: number; adsSell: number };
+
+let bitgetP2pArmyCache: { data: BitgetRow[]; fetchedAt: number } | null = null;
+// Cloudflare's Workers Free plan only grants 10 minutes of Browser Rendering time per day
+// (and 1 request/10s), so we cache aggressively to stay within that budget. On a paid
+// Workers plan (browser hours unmetered) this could safely be lowered for fresher data.
+const BITGET_P2P_ARMY_TTL_MS = 5 * 60_000;
+// Concurrent requests (e.g. buy+sell fired together by the client) must share a single
+// in-flight fetch, otherwise they race past the cache check and both hit the CF API,
+// tripping the "1 request/10s" rate limit.
+let bitgetP2pArmyInFlight: Promise<BitgetRow[]> | null = null;
+
+async function fetchBitgetRowsFromP2pArmy(coin: string, currency: string): Promise<BitgetRow[]> {
+  const now = Date.now();
+  if (bitgetP2pArmyCache && now - bitgetP2pArmyCache.fetchedAt < BITGET_P2P_ARMY_TTL_MS) {
+    return bitgetP2pArmyCache.data;
+  }
+  if (bitgetP2pArmyInFlight) {
+    return bitgetP2pArmyInFlight;
+  }
+  bitgetP2pArmyInFlight = fetchBitgetRowsFromP2pArmyUncached(coin, currency);
+  try {
+    return await bitgetP2pArmyInFlight;
+  } finally {
+    bitgetP2pArmyInFlight = null;
+  }
+}
+
+async function fetchBitgetRowsFromP2pArmyUncached(coin: string, currency: string): Promise<BitgetRow[]> {
+  const now = Date.now();
+  const accountId = process.env["CF_ACCOUNT_ID"] ?? "";
+  const apiToken = process.env["CF_API_TOKEN"] ?? "";
+  if (!accountId || !apiToken) {
+    logger.warn("Bitget P2P: CF_ACCOUNT_ID/CF_API_TOKEN not configured, cannot render p2p.army");
+    return bitgetP2pArmyCache?.data ?? [];
+  }
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const headers: Record<string, string> = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
-      "Accept": "application/json, text/plain, */*",
-      "Content-Type": "application/json;charset=UTF-8",
-      "Origin": "https://www.bitget.com",
-      "Referer": "https://www.bitget.com/p2p-trading/",
-    };
-    if (webToken) {
-      headers["Cookie"] = webToken;
-    }
-    const resp = await fetch("https://www.bitget.com/v1/p2p/pub/adv/queryAdvList", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ coinName: coin, fiatCode: currency, tradeType, pageNo: 1, pageSize: 20 }),
-      signal: ctrl.signal,
-    });
+    const t = setTimeout(() => ctrl.abort(), 20000);
+    const resp = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/content`,
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${apiToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: `https://p2p.army/en/p2p/prices/bitget/${currency}/${coin}`,
+          gotoOptions: { waitUntil: "networkidle0", timeout: 20000 },
+        }),
+        signal: ctrl.signal,
+      }
+    );
     clearTimeout(t);
     const json: any = await resp.json();
-    const list: any[] = json?.data?.dataList ?? [];
-    if (json.code === "00000" && list.length > 0) {
-      return list.slice(0, 10).map((it: any, i: number) => ({
-        rank: i + 1,
-        nickname: it.nickName ?? it.merchantName ?? it.advertiserName ?? "—",
-        price: parseFloat(it.price ?? it.unitPrice ?? "0"),
-        minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
-        maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
-      }));
+    if (!json.success || typeof json.result !== "string") {
+      logger.warn({ errors: json.errors }, "Bitget P2P: browser-rendering call failed");
+      return bitgetP2pArmyCache?.data ?? [];
     }
-    logger.warn({ code: json.code, msg: json.msg, listLen: list.length }, "Bitget P2P queryAdvList empty/non-success");
+    const html: string = json.result;
+    const rows: BitgetRow[] = [];
+    for (const row of html.split("<tr").slice(1)) {
+      const nameM = row.match(/<span class="text-sm tracking-tight">([^<]+)<\/span>/);
+      if (!nameM) continue;
+      const buyM = row.match(/data-tooltip-id="prices-buy-tooltip" data-tooltip-content="([0-9.]+)"/);
+      const sellM = row.match(/data-tooltip-id="prices-sell-tooltip" data-tooltip-content="([0-9.]+)"/);
+      const adsM = row.match(/text-p2p-text-main">(\d+)<\/span><span class="mx-1 opacity-30">\/<\/span><span class="[^"]*">(\d+)<\/span>/);
+      rows.push({
+        method: nameM[1],
+        buy: buyM ? parseFloat(buyM[1]) : null,
+        sell: sellM ? parseFloat(sellM[1]) : null,
+        adsBuy: adsM ? parseInt(adsM[1], 10) : 0,
+        adsSell: adsM ? parseInt(adsM[2], 10) : 0,
+      });
+    }
+    if (rows.length === 0) {
+      logger.warn("Bitget P2P: p2p.army page parsed but no rows found");
+      return bitgetP2pArmyCache?.data ?? [];
+    }
+    bitgetP2pArmyCache = { data: rows, fetchedAt: now };
+    return rows;
   } catch (e) {
-    logger.warn({ err: String(e) }, "Bitget P2P fetch error");
+    logger.warn({ err: String(e) }, "Bitget P2P: p2p.army fetch/parse error");
+    return bitgetP2pArmyCache?.data ?? [];
   }
-  return [];
+}
+
+async function fetchBitgetTop(coin: string, currency: string, side: "buy" | "sell", _amount: number) {
+  const rows = await fetchBitgetRowsFromP2pArmy(coin, currency);
+  // "buy" (user buys USDT) → merchants are selling → use the "Section BUY(selling)" price;
+  // for the user this is the ask price, so cheapest first. "sell" → use "Section SELL(buying)"
+  // price, best (highest) for the user first.
+  const key = side === "buy" ? "buy" : "sell";
+  const withAds = side === "buy" ? "adsBuy" : "adsSell";
+  const filtered = rows.filter(r => r[key] !== null && r[withAds] > 0);
+  filtered.sort((a, b) => (side === "buy" ? (a[key]! - b[key]!) : (b[key]! - a[key]!)));
+  return filtered.slice(0, 10).map((r, i) => ({
+    rank: i + 1,
+    nickname: r.method,
+    price: r[key] as number,
+    minAmount: 0,
+    maxAmount: 0,
+  }));
 }
 
 router.get("/p2p/top-sellers", async (req, res) => {

@@ -28,3 +28,20 @@ Sanity check: non-P2P Bitget public endpoints (e.g. spot ticker) respond normall
 - POST api.bitget.com → 40009 sign error
 - Any server-side, US-origin, or datacenter/public-proxy-origin call (including a CF Worker, even when routed through Asia-geolocated public proxies) → empty dataList
 - GET on queryAdvList → 405, must be POST
+- Direct navigation to bitget.com via Cloudflare Browser Rendering + script injection to force VND selection → blocked by bitget.com's CSP (Trusted Types)
+
+## Working free workaround: p2p.army aggregator (found 2026-07-08)
+`https://p2p.army/en/p2p/prices/bitget/{currency}/{coin}` (e.g. `.../bitget/VND/USDT`) is a free public
+page that already aggregates live Bitget P2P buy/sell prices per payment method. It's client-rendered
+(plain curl/fetch shows no data), so it must be rendered with Cloudflare Browser Rendering's `/content`
+endpoint, then parsed via regex on the `<tr>` rows (payment method name, `data-tooltip-content` for
+buy/sell price, ads counts). This gives per-payment-method prices but NOT per-order min/max amounts
+(no individual merchant listings), so the same price list is reused across amount tiers.
+**Why:** Bitget's own queryAdvList is unconditionally geo/IP-blocked (see above) with no known bypass;
+p2p.army already solved the scraping problem and re-publishes the aggregated data.
+**Gotcha — CF Browser Rendering free-tier limits:** Workers Free plan grants only ~10 min of browser
+rendering time/day and throttles to ~1 request/10s. A polling UI that fires buy+sell requests together
+will race past a naive TTL cache and double-call the CF API, tripping "rate limit exceeded" (code 2001).
+Fix: dedupe with a shared in-flight promise (not just a TTL cache) so concurrent callers await one
+fetch, and use a multi-minute cache TTL (we use 5 min) to stay within the daily browser-hours budget.
+A paid CF Workers plan removes the browser-hours cap entirely if fresher data is needed later.
