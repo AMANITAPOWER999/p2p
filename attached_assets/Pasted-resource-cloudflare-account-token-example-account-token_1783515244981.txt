@@ -1,0 +1,555 @@
+resource "cloudflare_account_token" "example_account_token" {
+  account_id = "d4b63e504d4134d78dce2a69f88dc602"
+  name       = "gentle-mud-a829"
+
+  policies = [{
+    effect = "allow"
+    permission_groups = [{
+      id = "28f4b596e7d643029c524985477ae49a"
+    }]
+    resources = jsonencode({
+      "com.cloudflare.api.account.d4b63e504d4134d78dce2a69f88dc602" = {
+        "com.cloudflare.api.account.zone.*" = "*"
+      }
+    })
+  }, {
+    effect = "allow"
+    permission_groups = [{
+      id = "f7f0eda5697f475c90846e879bab8666"
+      }, {
+      id = "e086da7e2179491d91ee5f35b3ca210a"
+      }, {
+      id = "c1fde68c7bcc44588cbb6ddbc16d6480"
+      }, {
+      id = "05880cd1bdc24d8bae0be2136972816b"
+      }, {
+      id = "bf7481a1826f439697cb59a20b22293e"
+      }, {
+      id = "8d28297797f24fb8a0c332fe0866ec89"
+      }, {
+      id = "2e095cf436e2455fa62c9a9c2e18c478"
+      }, {
+      id = "cb142f7fbc3540f0bade0cbe75f606dc"
+      }, {
+      id = "82c075da3f4647a2a03becd0fe240f8a"
+      }, {
+      id = "bdbcd690c763475a985e8641dddc09f7"
+      }, {
+      id = "c3c847c5802d4ce3ba00e3e97b3c8555"
+      }, {
+      id = "ce18edbdcebf465e9d6d1d2fc80ffd42"
+      }, {
+      id = "901ca5e292584c6aa1b4cdb39248bb07"
+      }, {
+      id = "1d80f6f165ea47f2b55d4a393fd697de"
+      }, {
+      id = "d5812c023a5048b4882175a28952362d"
+      }, {
+      id = "50fc2f43318f40e4855a35d8de5bf643"
+      }, {
+      id = "0b7793327a1a417681e4d49ee233e184"
+      }, {
+      id = "61ddc58f1da14f95b33b41213360cbeb"
+      }, {
+      id = "58abbad6d2ce40abb2594fbe932a2e0e"
+      }, {
+      id = "e9f973896a184b1ca9d6a85a44efe55b"
+      }, {
+      id = "ecbbebe25a014fa793d5226d6218303c"
+      }, {
+      id = "b9588b65fdc04d5f9170816e2fef96e2"
+      }, {
+      id = "f9e1ba803b8d4d52b4d4184825b07a28"
+      }, {
+      id = "71b0df4c5b6c4d3196f4428d7a6580ea"
+      }, {
+      id = "c6f97eeee13345db8cc00af0953a42de"
+      }, {
+      id = "6c80e02421494afc9ae14414ed442632"
+      }, {
+      id = "7cf72faf220841aabcfdfab81c43c4f6"
+      }, {
+      id = "1af1fa2adc104452b74a9a3364202f20"
+      }, {
+      id = "6d7d15b1d1404e22ac442de7061d02a6"
+      }, {
+      id = "d2211ced11a34102bd128dd5b3910a7c"
+      }, {
+      id = "eb56a6953c034b9d97dd838155666f06"
+      }, {
+      id = "5bc3f8b21c554832afc660159ab75fa4"
+      }, {
+      id = "5e5d3e8efeec49f3afb67bafecbcd511"
+      }, {
+      id = "05a2a65760a546439ed29762b163cece"
+      }, {
+      id = "29eefa0805f94fdfae2b058b5b52f319"
+      }, {
+      id = "18555e39c5ba40d284dde87eda845a90"
+      }, {
+      id = "db37e5f1cb1a4e1aabaef8deaea43575"
+      }, {
+      id = "a7a233f9604845c787d4c8c39ac09c21"
+      }, {
+      id = "5df633d6b41c42bcaf5b4a62b9d14b64"
+      }, {
+      id = "2d5b4b1f6c89487bb7184c2c1dcd3bf1"
+      }, {
+      id = "da5bb637b72a4a29886c23489398b770"
+      }, {
+      id = "b714141b1e1941cebb38c017036262a6"
+      }, {
+      id = "e4589eb09e63436686cd64252a3aebeb"
+      }, {
+      id = "5272e56105d04b5897466995b9bd4643"
+      }, {
+      id = "a3567c13e074447fb101babac3463566"
+      }, {
+      id = "9e5a9912439940fca5898b5b8dc6d1a5"
+      }, {
+      id = "de21485a24744b76a004aa153898f7fe"
+      }, {
+      id = "714f9c13a5684c2885a793f5edb36f59"
+      }, {
+      id = "2f912625599b434a8df3e4e02d64c7b4"
+      }, {
+      id = "42fae5a23ce84d7a896ac12ef509dafa"
+      }, {
+      id = "0cf6473ad41449e7b7b743d14fc20c60"
+      }, {
+      id = "618ec6c64a3a42f8b08bdcb147ded4e4"
+      }, {
+      id = "b711942448db4b0aace44d1312f9fdb0"
+      }, {
+      id = "686ab9a8b3854f25a1474f302d14b68d"
+      }, {
+      id = "59059f0c977b44f8b1c18e0aaf91c369"
+      }, {
+      id = "419ec42810af4659ade77716dbe47bc6"
+      }, {
+      id = "3e4e20ee40b9475dae22201c468fdb70"
+      }, {
+      id = "d07270cea5484b08ad6440c985af2148"
+      }, {
+      id = "6ffe7f4299db4d4cb54f64e0eb12a456"
+      }, {
+      id = "c6f6338ceae545d0b90daaa1fed855e6"
+      }, {
+      id = "9ade9cfc8f8949bcb2371be2f0ec8db1"
+      }, {
+      id = "8764961c1edb4274be129d630b0b2671"
+      }, {
+      id = "95fa65ba51fd49c4a6ac4c8c78ebac93"
+      }, {
+      id = "77efc2c0724d4c4eb94bfd9656247130"
+      }, {
+      id = "92b8234e99f64e05bbbc59e1dc0f76b6"
+      }, {
+      id = "27beb7f8333b41e2b946f0e23cd8091e"
+      }, {
+      id = "4ea7d6421801452dbf07cef853a5ef39"
+      }, {
+      id = "3a46c728a0a040d5a65cd8e2f3bc6935"
+      }, {
+      id = "17fc856c4ebe49d4bb70f8e4744398cf"
+      }, {
+      id = "a1a7389ba7e441dba95852e10970fcc3"
+      }, {
+      id = "0bc09a3cd4b54605990df4e307f138e1"
+      }, {
+      id = "967ecf860a244dd1911a0331a0af582a"
+      }, {
+      id = "3d85e9514f944bb4912c5871d92e5af5"
+      }, {
+      id = "09c77baecb6341a2b1ca2c62b658d290"
+      }, {
+      id = "8e6ed1ef6e864ad0ae477ceffa5aa5eb"
+      }, {
+      id = "8bd1dac84d3d43e7bfb43145f010a15c"
+      }, {
+      id = "02b71f12bb0748e9af8126494e181342"
+      }, {
+      id = "d2a1802cc9a34e30852f8b33869b2f3c"
+      }, {
+      id = "9d24387c6e8544e2bc4024a03991339f"
+      }, {
+      id = "2ae23e4939d54074b7d252d27ce75a77"
+      }, {
+      id = "e763fae6ee95443b8f56f19213c5f2a5"
+      }, {
+      id = "374b03fa229f4eb6b011bb1cd7f235ee"
+      }, {
+      id = "adddda876faa4a0590f1b23a038976e4"
+      }, {
+      id = "5b1d209212064a84aae4fb68e3908333"
+      }, {
+      id = "47b936e2027140c0a474cac8887b8c29"
+      }, {
+      id = "65ec50cbde3d4c838bbe7500024d5745"
+      }, {
+      id = "26ce6c7d18a346528e7b905d5e269866"
+      }, {
+      id = "7c81856725af47ce89a790d5fb36f362"
+      }, {
+      id = "eeffa4d16812430cb4a0ae9e7f46fc24"
+      }, {
+      id = "192192df92ee43ac90f2aeeffce67e35"
+      }, {
+      id = "09b2857d1c31407795e75e3fed8617a1"
+      }, {
+      id = "521a41dc78f94eaba5e643528846cb7b"
+      }, {
+      id = "51cceea6f2d048deab6c6e7afa734727"
+      }, {
+      id = "fa4f07d72d5546aabb6bec9a4a399045"
+      }, {
+      id = "4d62ccf834df44808bc9283d65c4e4e9"
+      }, {
+      id = "721b2f51fba74871bd361de65aeb7e03"
+      }, {
+      id = "db3d398df73946acb755c05b69edfc30"
+      }, {
+      id = "b84a912ebb4a418888fec65f65c8ff3b"
+      }, {
+      id = "e247aedd66bd41cc9193af0213416666"
+      }, {
+      id = "14b9cf2f410f4c0c9a16bb10a81c0e0b"
+      }, {
+      id = "5606e7405dc542949d949d59993d321f"
+      }, {
+      id = "e34111af393449539859485aa5ddd5bd"
+      }, {
+      id = "910b6ecca1c5411bb894e787362d1312"
+      }, {
+      id = "fd7f886c75a244389e892c4c3c068292"
+      }, {
+      id = "84a7755d54c646ca87cd50682a34bf7c"
+      }, {
+      id = "366f57075ffc42689627bcf8242a1b6d"
+      }, {
+      id = "ba6ce7d23a9544ccad0816691ba38e21"
+      }, {
+      id = "adc8fa2bc6124928a8b3314dc63a1235"
+      }, {
+      id = "5e33b7d77788455c9fdf18cbd38ee5a0"
+      }, {
+      id = "64156ba5be47441096c83c7fc17c488b"
+      }, {
+      id = "1799edaae5db489294430e20d9b519e0"
+      }, {
+      id = "ad99c5ae555e45c4bef5bdf2678388ba"
+      }, {
+      id = "cfd39eebc07c4e3ea849e4b3d2644637"
+      }, {
+      id = "8b47d2786a534c08a1f94ee8f9f599ef"
+      }, {
+      id = "66c1ed49f4ed46098b75696a6d4ee3c9"
+      }, {
+      id = "29c629fb7b5e4c408ca0f7b545724fcc"
+      }, {
+      id = "d229766a2f7f4d299f20eaa8c9b1fde9"
+      }, {
+      id = "f45430d92e2b4a6cb9f94f2594c141b8"
+      }, {
+      id = "45db74139a62490b9b60eb7c4f34994b"
+      }, {
+      id = "b4992e1108244f5d8bfbd5744320c2e1"
+      }, {
+      id = "1a71c399035b4950a1bd1466bbe4f420"
+      }, {
+      id = "151803815e4f47de854c2fb7f8284d57"
+      }, {
+      id = "82748b814dcd46b9b3e66b8151ba5e95"
+      }, {
+      id = "e84fd345697c4036a14e7810da036e1a"
+      }, {
+      id = "6c8a3737f07f46369c1ea1f22138daaf"
+      }, {
+      id = "644535f4ed854494a59cb289d634b257"
+      }, {
+      id = "4dc8917b4b40457d88d3035d5dadb054"
+      }, {
+      id = "01aab63d6e064d7a8160339985d2db19"
+      }, {
+      id = "e5e805d0a90441b58e8c7a41aa1cf85e"
+      }, {
+      id = "384a77ea7c2e47d898715dc6a064f3f4"
+      }, {
+      id = "7fb8d27511b34d02994d005b520b679f"
+      }, {
+      id = "234108c786084936a381bb19b7f4ea65"
+      }, {
+      id = "d7887c7a417e4cf2a69f1d01c1a1dc3b"
+      }, {
+      id = "839a02e413024d06a4e7d8c56d4470d7"
+      }, {
+      id = "bacc64e0f6c34fc0883a1223f938a104"
+      }, {
+      id = "a92d2450e05d4e7bb7d0a64968f83d11"
+      }, {
+      id = "cfa964bcdafc4ab39704e7476154e41b"
+      }, {
+      id = "dc44f27f48ab405392a5f69fe822bd01"
+      }, {
+      id = "da6d2d6f2ec8442eaadda60d13f42bca"
+      }, {
+      id = "5f48a472240a4b489a21d43bd19a06e1"
+      }, {
+      id = "95d69e8d6d5144bfb0923667355d9f11"
+      }, {
+      id = "5b7aedd821a548b9bf5a2acabbce98c7"
+      }, {
+      id = "136d0be1ddc64eaf8516fa6994abfad4"
+      }, {
+      id = "9bb90620717647a39679e1d951f140d6"
+      }, {
+      id = "2e0d8adc461d4cf78651efa2dfbb237c"
+      }, {
+      id = "a649bfc3532148768b854e294a544425"
+      }, {
+      id = "1d9f8b86d5d84ce497fc64a620be96e5"
+      }, {
+      id = "a416acf9ef5a4af19fb11ed3b96b1fe6"
+      }, {
+      id = "de7a688cc47d43bd9ea700b467a09c96"
+      }, {
+      id = "ece81d7757ff406cad61f221a4920d55"
+      }, {
+      id = "cfa2e2893226455c9b945914969dff7c"
+      }, {
+      id = "cde8c82463b6414ca06e46b9633f52a6"
+      }, {
+      id = "56b2af4817c84ad99187911dc3986c23"
+      }, {
+      id = "f3604047d46144d2a3e9cf4ac99d7f16"
+      }, {
+      id = "d79c5e2a405b4516a322432287d40c31"
+      }, {
+      id = "677767156f294485b497a8f103172e7d"
+      }, {
+      id = "cf9353ed7978436e8fb20c03fce26449"
+      }, {
+      id = "dee7c22a57674abea8f942110b094717"
+      }, {
+      id = "0caa90c9b186447397c8b00358d34a76"
+      }, {
+      id = "d44ed14bcc4340b194d3824d60edad3f"
+      }, {
+      id = "af1c363c35ba45b9a8c682ae50eb3f99"
+      }, {
+      id = "76ade66d66184468b2ae2c037e995ac4"
+      }, {
+      id = "c5bac3bbefb34feca30204c8d082c444"
+      }, {
+      id = "4736c02a9f224c8196ae5b127beae78c"
+      }, {
+      id = "865ebd55bc6d4b109de6813eccfefd13"
+      }, {
+      id = "7a4c3574054a4d0ba7c692893ba8bdd4"
+      }, {
+      id = "050531528b044d58bbb71666fef7c07c"
+      }, {
+      id = "4657621393f94f83b8ef94adba382e48"
+      }, {
+      id = "212c9ff247b9406d990c017482afb3a5"
+      }, {
+      id = "6b60a5a87cae475da7e76e77e4209dd5"
+      }, {
+      id = "a9846a16265d4c9aa9729043886269fd"
+      }, {
+      id = "0224cdb141684f0f9760ed0be83b6766"
+      }, {
+      id = "18ac4526dc844013a799d8406a0ebb12"
+      }, {
+      id = "f0ba3733e746429182fcd40ec648c066"
+      }, {
+      id = "120f843a9c074f399b830e542e5616b8"
+      }, {
+      id = "755c05aa014b4f9ab263aa80b8167bd8"
+      }, {
+      id = "5d78fd7895974fd0bdbbbb079482721b"
+      }, {
+      id = "5d613a610b294788a29572aaac2f254d"
+      }, {
+      id = "2a400bcb29154daab509fe07e3facab0"
+      }, {
+      id = "c549844593894d73b03ed3c17b2af00c"
+      }, {
+      id = "ba9adcdbea5940dd84aa692e77e8eaf6"
+      }, {
+      id = "8a9d35a7c8504208ad5c3e8d58e6162d"
+      }, {
+      id = "c57ea647ef654b47bc8944fa739b570d"
+      }, {
+      id = "4f1071168de8466e9808de86febfc516"
+      }, {
+      id = "2edbf20661fd4661b0fe10e9e12f485c"
+      }, {
+      id = "56907406c3d548ed902070ec4df0e328"
+      }, {
+      id = "ae16e88bc7814753a1894c7ce187ab72"
+      }, {
+      id = "abe78e2276664f4db588c1f675a77486"
+      }, {
+      id = "235eac9bb64942b49cb805cc851cb000"
+      }, {
+      id = "595409c54a24444b80a495620b2d614c"
+      }, {
+      id = "429a068902904c5a9ed9fc267c67da9a"
+      }, {
+      id = "a9a99455bf3245f6a5a244f909d74830"
+      }, {
+      id = "fb39996ee9044d2a8725921e02744b39"
+      }, {
+      id = "7ea222f6d5064cfa89ea366d7c1fee89"
+      }, {
+      id = "6c9d1cfcfc6840a987d1b5bfb880a841"
+      }, {
+      id = "1e13c5124ca64b72b1969a67e8829049"
+      }, {
+      id = "ad7a6f88896d498f98eb30592abfbbf4"
+      }, {
+      id = "969eb865330a4d68b215b0cc8fba64ea"
+      }, {
+      id = "2dd44e425a914fb98f8d1ddbbcd66915"
+      }, {
+      id = "b05b28e839c54467a7d6cba5d3abb5a3"
+      }, {
+      id = "4e5fd8ac327b4a358e48c66fcbeb856d"
+      }, {
+      id = "08e61dabe81a422dab0dea6fdef1a98a"
+      }, {
+      id = "0f4841f80adb4bada5a09493300e7f8d"
+      }, {
+      id = "2fc1072ee6b743828db668fcb3f9dee7"
+      }, {
+      id = "f2f1e4d555854b8593912806eb459691"
+      }, {
+      id = "abe9cecdf3234d5da2a8d7a6adc9aebf"
+      }, {
+      id = "5541aee5804a4850aa6d77351cc4a610"
+      }, {
+      id = "9c35051ed89842839a637f81448d8c7c"
+      }, {
+      id = "0974adb35b73411a84ebcc8e91cc29eb"
+      }, {
+      id = "e7e40392e132414fb68890c3328bdc6a"
+      }, {
+      id = "29d3afbfd4054af9accdd1118815ed05"
+      }, {
+      id = "4f3196a5c95747b6ad82e34e1d0a694f"
+      }, {
+      id = "b219cc392cc843cfab473cf3abd06c5b"
+      }, {
+      id = "14fb1ba9b3924f91bd8e1a256d0a42f5"
+      }, {
+      id = "aed5acd922ae4fa68560cf0094e3e517"
+      }, {
+      id = "bfe0d8686a584fa680f4c53b5eb0de6d"
+      }, {
+      id = "7121a0c7e9ed46e3829f9cca2bb572aa"
+      }, {
+      id = "26bc23f853634eb4bff59983b9064fde"
+      }, {
+      id = "e9e3e5ccdebf43dbb1c9576fe74dfaab"
+      }, {
+      id = "6d23f290472f4e6fad5c4398c057c356"
+      }, {
+      id = "bc783549a3a741aaa10556faf8b485bb"
+      }, {
+      id = "5286f5b44cba457fa75b22f94716b8dd"
+      }, {
+      id = "e985ca9351db460faebbe8681c48e560"
+      }, {
+      id = "796da9664bba4f03b2fc934b5ee86091"
+      }, {
+      id = "de99c87e48d642ce8c985d027905b475"
+      }, {
+      id = "b8b7514ce5364cd8ac0455f3eb16eb5f"
+      }, {
+      id = "84b9a6a947474555aeb43a82300ce145"
+      }, {
+      id = "a1c0fec57cf94af79479a6d827fa518c"
+      }, {
+      id = "d30c9ad8b5224e7cb8d41bcb4757effc"
+      }, {
+      id = "d320e35958c845c89e69098a4ea38f64"
+      }, {
+      id = "d376dac8822b439a991b795c87789e6f"
+      }, {
+      id = "c07321b023e944ff818fec44d8203567"
+      }, {
+      id = "b9ed086b20864ad89c5aac24cdd02365"
+      }, {
+      id = "9bf884ba0de445dab37ea4a3e1a2c9f1"
+      }, {
+      id = "037b9e348b3b42d4b46ea2fcb1cfb3e7"
+      }, {
+      id = "5b5c774a5d174ca88d046c8889648b3f"
+      }, {
+      id = "1cd960c063a0448481343372c963d8c7"
+      }, {
+      id = "c1968d31028d4239976ec3bc4750bbf6"
+      }, {
+      id = "00ec19a0d4fa4e4aae23b50bf04c0630"
+      }, {
+      id = "da5fe84b9c5446a0a5955b673fafa288"
+      }, {
+      id = "efea2ab8357b47888938f101ae5e053f"
+      }, {
+      id = "7a3629ac278d41adbfac30094a94f778"
+      }, {
+      id = "f6f99815bf8f4f7abffe6bc73873a5b9"
+      }, {
+      id = "99ff99e4e30247a99d3777a8c4c18541"
+      }, {
+      id = "91f7ce32fa614d73b7e1fc8f0e78582b"
+      }, {
+      id = "a1a6298e52584c8fb6313760a30c681e"
+      }, {
+      id = "f5d857f67f144e3c8bacea88c17d4a13"
+      }, {
+      id = "cc00ebddebca4b8399607562a78df084"
+      }, {
+      id = "07f91e3e32b647ffae0178d884f23ee0"
+      }, {
+      id = "3f376c8e6f764a938b848bd01c8995c4"
+      }, {
+      id = "efb81b5cd37d49f3be1da9363a6d7a19"
+      }, {
+      id = "b33f02c6f7284e05a6f20741c0bb0567"
+      }, {
+      id = "92c8dcd551cc42a6a57a54e8f8d3f3e3"
+      }, {
+      id = "3b376e0aa52c41cbb6afc9cab945afa8"
+      }, {
+      id = "04e557c45f60434c88a23b9f7c8169af"
+      }, {
+      id = "7e252e992042421c8f2cdef3ada208c9"
+      }, {
+      id = "e2980d9241cf4939bbbd74fdc43b9651"
+      }, {
+      id = "4f1276d1e7e34c32a5012bbe02ece86d"
+      }, {
+      id = "07cf1c1952a84b13b2cd542f3d2f29ab"
+      }, {
+      id = "a7030c9c98d544e092d8b099fabb1f06"
+      }, {
+      id = "b89a480218d04ceb98b4fe57ca29dc1f"
+      }, {
+      id = "96163bd1b0784f62b3e44ed8c2ab1eb6"
+      }, {
+      id = "6a315a56f18441e59ed03352369ae956"
+      }, {
+      id = "df1577df30ee46268f9470952d7b0cdf"
+      }, {
+      id = "92209474242d459690e2cdb1985eaa6c"
+      }, {
+      id = "dfe525ec7b07472c827d8d009178b2ac"
+    }]
+    resources = jsonencode({
+      "com.cloudflare.api.account.d4b63e504d4134d78dce2a69f88dc602" = "*"
+    })
+  }]
+
+  expires_on = "2027-07-08T23:59:59Z"
