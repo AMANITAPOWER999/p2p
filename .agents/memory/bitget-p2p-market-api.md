@@ -15,13 +15,16 @@ Item fields: `nickName`, `price`, `minOrderAmount`, `maxOrderAmount`
 
 ## CORS: access-control-allow-origin: * (public, no auth needed)
 
-## Geo-restriction
-Server-side (Replit US datacenter): returns 00000 success but dataList always empty — Cloudflare geo-blocks datacenter IPs.
-Browser-side call directly from app origin: blocked by CORS preflight in practice (403 on OPTIONS) despite `access-control-allow-origin: *` on the real response — direct client fetch doesn't reliably work either.
-**Working fix**: a Cloudflare Worker (see cloudflare-workers-deploy.md) as a pass-through proxy, called from the browser. CF Workers execute at the PoP nearest the caller, so a Vietnam-based browser → Worker runs on an Asian PoP → Bitget sees a non-US IP → real data. The SAME worker invoked from a US Replit shell/server still gets geo-blocked (empty dataList) — this is expected and not a bug; only real end-user (non-US) browsers get valid data.
+## Geo-restriction — CORRECTED understanding
+Server-side (Replit US datacenter): returns 00000 success but dataList always empty.
+Realistic browser headers (Chrome UA, Origin/Referer set) from a US/datacenter IP: still empty — so it's not just a missing-header/UA check.
+Tested through ~8 public HTTP proxies geolocated in Vietnam/Indonesia/Philippines/etc: the ones that connected still returned empty dataList. This means the block is NOT purely country-based — it also (or instead) fingerprints/blocks known datacenter, hosting, and public-proxy IP ranges regardless of country. A Cloudflare Worker's outbound `fetch()` also egresses from Cloudflare's own IP pool (not the visiting browser's IP), so the "Worker executes near the caller" theory does NOT guarantee a residential-looking source IP to Bitget — this was an unverified assumption in the original fix and should not be treated as proven.
+Only a genuine residential/mobile ISP IP in an allowed country (verified by a real end user opening the Telegram mini-app on their own device/network) can confirm whether the feature truly works — this has NOT yet been confirmed with real user data as of 2026-07-08.
+Sanity check: non-P2P Bitget public endpoints (e.g. spot ticker) respond normally (proper param-validation errors) from the same blocked environment — confirming the restriction is specific to the P2P `queryAdvList` endpoint's anti-fraud/anti-scraping layer, not a blanket domain block.
 
 ## What does NOT work
 - api.bitget.com advList → 60004 (own ads only)
 - www.bitget.com/v1/p2p/advertisement/list → 404
 - POST api.bitget.com → 40009 sign error
-- Any server-side or US-origin call (including a CF Worker invoked from a US IP) → geo-blocked empty dataList
+- Any server-side, US-origin, or datacenter/public-proxy-origin call (including a CF Worker, even when routed through Asia-geolocated public proxies) → empty dataList
+- GET on queryAdvList → 405, must be POST
