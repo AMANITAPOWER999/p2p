@@ -310,6 +310,11 @@ export default function Dashboard() {
           });
           const d = await r.json();
           const list: any[] = d?.data?.dataList ?? [];
+          if (list.length === 0) {
+            console.warn("[Bitget P2P] пустой список", { tradeType, httpStatus: r.status, code: d?.code, msg: d?.msg, raw: d });
+          } else {
+            console.log("[Bitget P2P] получено объявлений:", list.length, "tradeType", tradeType);
+          }
           return list.map((it: any, i: number) => ({
             rank: i + 1,
             nickname: it.nickName ?? it.merchantName ?? "—",
@@ -317,7 +322,10 @@ export default function Dashboard() {
             minAmount: parseFloat(it.minOrderAmount ?? it.minAmount ?? "0"),
             maxAmount: parseFloat(it.maxOrderAmount ?? it.maxAmount ?? "0"),
           }));
-        } catch { return []; }
+        } catch (e) {
+          console.error("[Bitget P2P] ошибка запроса к воркеру", e);
+          return [];
+        }
       };
       // Bitget doesn't support server-side amount filtering like Bybit — filter client-side
       // by min/max order amount so each merchant can actually handle that transaction size.
