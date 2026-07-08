@@ -299,17 +299,18 @@ export default function Dashboard() {
           .then(r => r.json()).then(d => (d.top ?? []) as TopSeller[]).catch(() => [] as TopSeller[]);
 
       // Bitget via CF Worker (client-side → VN IP → Bitget works)
+      // tradeType "1" = merchants selling USDT (= user buys), "2" = merchants buying USDT (= user sells)
       const gBitget = async (tradeType: "1" | "2"): Promise<TopSeller[]> => {
         if (!BITGET_WORKER_URL) return [];
         try {
           const r = await fetch(BITGET_WORKER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ coinName: "USDT", fiatCode: "VND", tradeType, pageNo: 1, pageSize: 10 }),
+            body: JSON.stringify({ coinName: "USDT", fiatCode: "VND", tradeType, pageNo: 1, pageSize: 30 }),
           });
           const d = await r.json();
           const list: any[] = d?.data?.dataList ?? [];
-          return list.slice(0, 10).map((it: any, i: number) => ({
+          return list.map((it: any, i: number) => ({
             rank: i + 1,
             nickname: it.nickName ?? it.merchantName ?? "—",
             price: parseFloat(it.price ?? "0"),
@@ -318,16 +319,23 @@ export default function Dashboard() {
           }));
         } catch { return []; }
       };
+      // Bitget doesn't support server-side amount filtering like Bybit — filter client-side
+      // by min/max order amount so each merchant can actually handle that transaction size.
+      const filterByAmount = (list: TopSeller[], amount: number): TopSeller[] =>
+        list
+          .filter(x => x.minAmount <= amount && x.maxAmount >= amount)
+          .slice(0, 5)
+          .map((x, i) => ({ ...x, rank: i + 1 }));
 
-      const [bbBuy150k, bbSell150k, bbBuy10m, bbSell10m, bgBuy, bgSell] = await Promise.all([
+      const [bbBuy150k, bbSell150k, bbBuy10m, bbSell10m, bgBuyAll, bgSellAll] = await Promise.all([
         gb("buy",150000), gb("sell",150000), gb("buy",10000000), gb("sell",10000000),
-        gBitget("2"), gBitget("1"),
+        gBitget("1"), gBitget("2"),
       ]);
       const data: TopSellersData = {
         bybit_150k_buy:  bbBuy150k,  bybit_150k_sell:  bbSell150k,
         bybit_10m_buy:   bbBuy10m,   bybit_10m_sell:   bbSell10m,
-        bitget_150k_buy: bgBuy,      bitget_150k_sell: bgSell,
-        bitget_10m_buy:  bgBuy,      bitget_10m_sell:  bgSell,
+        bitget_150k_buy: filterByAmount(bgBuyAll, 150000),  bitget_150k_sell: filterByAmount(bgSellAll, 150000),
+        bitget_10m_buy:  filterByAmount(bgBuyAll, 10000000), bitget_10m_sell: filterByAmount(bgSellAll, 10000000),
       };
       setTopSellers(data);
       setTopSellersCountdown(15);
