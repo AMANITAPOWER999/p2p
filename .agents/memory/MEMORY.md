@@ -1,1 +1,2 @@
-- [Bitget P2P market API](bitget-p2p-market-api.md) — pub/adv/queryAdvList POST, CORS:*, geo-blocked server-side → must call from browser client-side
+- [Bitget P2P market API](bitget-p2p-market-api.md) — pub/adv/queryAdvList POST, geo-blocked from US IPs (server or worker); needs a real non-US browser caller
+- [Cloudflare Workers deploy via REST API](cloudflare-workers-deploy.md) — deploy without wrangler using account ID + API token; module format + filename gotchas
